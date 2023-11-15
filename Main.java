@@ -5,15 +5,28 @@ class JPEGHeader {
 	int width;
 	int height;
 	byte[] sos;
+	int[][] luminanceQuantizedTable;
+	int[][] chrominanceQuantizedTable;
 	List<Integer> data;
 
 	JPEGHeader() {
 		this.sos = new byte[10];
+		this.luminanceQuantizedTable = new int[8][8];
+		this.chrominanceQuantizedTable = new int[8][8];
 		this.data = new ArrayList<Integer>();
 	}
 
 	public void pushData(int value) {
-		data.add(value); }
+		data.add(value);
+	}
+
+	public int[][] getLuminanceQuantizedTable() {
+		return luminanceQuantizedTable;
+	}
+
+	public int[][] getChrominanceQuantizedTable() {
+		return chrominanceQuantizedTable;
+	}
 
 	public List<Integer> getData() {
 		return data;
@@ -42,6 +55,7 @@ class Main {
 			usage();
 			System.exit(1);
 		}
+
 		String jpegImageFilename = args[0];
 		try {
 			File jpegImage = new File(jpegImageFilename);
@@ -59,7 +73,49 @@ class Main {
 
 				byteData = jpegStream.read();
 				switch (byteData) {
-					// reach a marker that contains the height and width information
+					// SOI(Start of Image)
+					case 0xD8:
+						jpegStream.read();
+						break;
+
+					// APP0
+					case 0xE0:
+						byteData1 = jpegStream.read();
+						byteData2 = jpegStream.read();
+						markerSize = getMarkerSize(byteData1, byteData2) - 2;
+						jpegStream.readNBytes(markerSize);
+						break;
+
+					// DQT(Define Quantization Table)
+					case 0xDB:
+						// marker size
+						jpegStream.read();
+						jpegStream.read();
+
+						byteData = jpegStream.read();
+						// luminance
+						if(byteData == 0x00){
+							for (int i = 0; i < 8; i++) {
+                                for (int j = 0; j < 8; j++) {
+                                    byteData = jpegStream.read();
+                                    jpegHeader.luminanceQuantizedTable[i][j] = byteData;
+                                }
+                            }
+						} else { // chrominance
+							for (int i = 0; i < 8; i++) {
+                                for (int j = 0; j < 8; j++) {
+                                    byteData = jpegStream.read();
+                                    jpegHeader.chrominanceQuantizedTable[i][j] = byteData;
+                                }
+                            }
+						}
+						break;
+
+					// DHT(Define Huffman Table)
+					case 0xC4:
+						break;
+
+					// SOF(Start of Frame)
 					case 0xC0:
 						jpegStream.read();
 						jpegStream.read();
@@ -85,7 +141,8 @@ class Main {
 								// EOI(End of Image)
 								if (byteData1 == 0xD9) {
 									System.out.println("End of image and size: " + jpegHeader.getData().size());
-									System.out.println("width:  " + jpegHeader.getWidth() + ", height: " + jpegHeader.getHeight());
+									System.out.println(
+											"width:  " + jpegHeader.getWidth() + ", height: " + jpegHeader.getHeight());
 									System.out.println("sos size: " + jpegHeader.sos.length);
 									break;
 								} else {
@@ -103,6 +160,23 @@ class Main {
 			}
 			jpegStream.close();
 
+			// int[][] chrominance = jpegHeader.getChrominanceQuantizedTable();		
+			// int[][] luminance = jpegHeader.getLuminanceQuantizedTable();
+			// // loop through luminance table
+			// for (int i = 0; i < 8; i++) {
+			// 	for (int j = 0; j < 8; j++) {
+            //         System.out.print(String.format("0x%X", luminance[i][j]) + " ");
+            //     }
+            //     System.out.println();
+            // }
+			// System.out.println("-----------------");
+			// // loop through chrominance table
+			// for (int i = 0; i < 8; i++) {
+			// 	for (int j = 0; j < 8; j++) {
+            //         System.out.print(String.format("0x%X", chrominance[i][j]) + " ");
+            //     }
+            //     System.out.println();
+            // }
 		} catch (Exception e) {
 			System.out.println("Cannot read jpeg image");
 			e.printStackTrace();
