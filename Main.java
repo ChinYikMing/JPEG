@@ -30,6 +30,8 @@ class JPEGHeader {
 	HashMap<Integer, Integer> componentQuantizedMap;
 	HashMap<Integer, Integer> componentACHuffmanMap;
 	HashMap<Integer, Integer> componentDCHuffmanMap;
+	HashMap<Integer, Integer> componentHorizontalSamplingFactorMap;
+	HashMap<Integer, Integer> componentVerticalSamplingFactorMap;
 	int[][] luminanceQuantizedTable;
 	int[][] chrominanceQuantizedTable;
 	List<HuffmanTable> DCHuffmanTable;
@@ -41,6 +43,8 @@ class JPEGHeader {
 		this.componentQuantizedMap = new HashMap<Integer, Integer>();
 		this.componentACHuffmanMap = new HashMap<Integer, Integer>();
 		this.componentDCHuffmanMap = new HashMap<Integer, Integer>();
+		this.componentHorizontalSamplingFactorMap = new HashMap<Integer, Integer>();
+		this.componentVerticalSamplingFactorMap = new HashMap<Integer, Integer>();
 		this.luminanceQuantizedTable = new int[8][8];
 		this.chrominanceQuantizedTable = new int[8][8];
 		this.DCHuffmanTable = new ArrayList<HuffmanTable>();
@@ -62,6 +66,14 @@ class JPEGHeader {
 
 	public HashMap<Integer, Integer> getComponentQuantizedMap() {
 		return componentQuantizedMap;
+	}
+
+	public HashMap<Integer, Integer> getComponentHorizontalSamplingFactorMap() {
+		return componentHorizontalSamplingFactorMap;
+	}
+
+	public HashMap<Integer, Integer> getComponentVerticalSamplingFactorMap() {
+		return componentVerticalSamplingFactorMap;
 	}
 
 	public int getComponentCount() {
@@ -210,10 +222,37 @@ class Main {
 						jpegStream.read();
 						byteData1 = jpegStream.read();
 						byteData2 = jpegStream.read();
-						jpegHeader.setWidth(getWidth(byteData1, byteData2));
+						jpegHeader.setHeight(getHeight(byteData1, byteData2));
 						byteData1 = jpegStream.read();
 						byteData2 = jpegStream.read();
-						jpegHeader.setHeight(getHeight(byteData1, byteData2));
+						jpegHeader.setWidth(getWidth(byteData1, byteData2));
+
+						int componentCount = jpegStream.read();
+						jpegHeader.setComponentCount(componentCount);
+						for(int i = 0; i < componentCount; i++) {
+							int componentID = jpegStream.read();
+							byteData = jpegStream.read();
+							int horizontalSamplingFactor = (byteData & 0xF0) >> 4;
+							int verticalSamplingFactor = byteData & 0x0F;
+							int quantizeID = jpegStream.read();
+
+							jpegHeader.getComponentHorizontalSamplingFactorMap().put(componentID, horizontalSamplingFactor);
+							jpegHeader.getComponentVerticalSamplingFactorMap().put(componentID, verticalSamplingFactor);
+							jpegHeader.getComponentQuantizedMap().put(componentID, quantizeID);
+						}
+
+						// HashMap<Integer, Integer> map = jpegHeader.getComponentHorizontalSamplingFactorMap();
+						// HashMap<Integer, Integer> map1 = jpegHeader.getComponentVerticalSamplingFactorMap();
+						// HashMap<Integer, Integer> map2 = jpegHeader.getComponentQuantizedMap();
+						// System.out.println("horizontal sampling factor");
+						// for(int i = 1; i <= map.size(); i++){
+						// 	System.out.println("componentID: " + i);
+						// 	System.out.println("vertical sampling factor: " + map1.get(i));
+						// 	System.out.println("horizontal sampling factor: " + map.get(i));
+						// 	System.out.println("quantize table ID: " + map2.get(i));
+						// 	System.out.println("--------------------------------");
+						// }
+						// System.exit(0);
 						break;
 					// SOS(Start of Scan)
 					case 0xDA:
@@ -221,7 +260,7 @@ class Main {
 						byteData2 = jpegStream.read();
 						markerSize = getMarkerSize(byteData1, byteData2) - 2;
 
-						int componentCount = jpegStream.read();
+						componentCount = jpegStream.read();
 						jpegHeader.setComponentCount(componentCount);
 
 						for (int i = 0; i < componentCount; i++) {
