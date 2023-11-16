@@ -8,24 +8,28 @@ class HuffmanTable {
 	HuffmanTable(int ID) {
 		this.ID = ID;
 		this.bitSymbolTable = new HashMap<Integer, List<Integer>>();
-		for(int i = 0; i < 16; i++){
+		for (int i = 0; i < 16; i++) {
 			this.bitSymbolTable.put(i + 1, new ArrayList<Integer>()); // i + 1 simply starts from index 1
 		}
 	}
 
 	public int getID() {
-        return ID;
-    }
+		return ID;
+	}
 
 	public HashMap<Integer, List<Integer>> getBitSymbolTable() {
-        return bitSymbolTable;
-    }
+		return bitSymbolTable;
+	}
 }
 
 class JPEGHeader {
 	int width;
 	int height;
 	byte[] sos;
+	int componentCount;
+	HashMap<Integer, Integer> componentQuantizedMap;
+	HashMap<Integer, Integer> componentACHuffmanMap;
+	HashMap<Integer, Integer> componentDCHuffmanMap;
 	int[][] luminanceQuantizedTable;
 	int[][] chrominanceQuantizedTable;
 	List<HuffmanTable> DCHuffmanTable;
@@ -34,6 +38,9 @@ class JPEGHeader {
 
 	JPEGHeader() {
 		this.sos = new byte[10];
+		this.componentQuantizedMap = new HashMap<Integer, Integer>();
+		this.componentACHuffmanMap = new HashMap<Integer, Integer>();
+		this.componentDCHuffmanMap = new HashMap<Integer, Integer>();
 		this.luminanceQuantizedTable = new int[8][8];
 		this.chrominanceQuantizedTable = new int[8][8];
 		this.DCHuffmanTable = new ArrayList<HuffmanTable>();
@@ -43,6 +50,26 @@ class JPEGHeader {
 
 	public void pushData(int value) {
 		data.add(value);
+	}
+
+	public HashMap<Integer, Integer> getComponentACHuffmanMap() {
+		return componentACHuffmanMap;
+	}
+
+	public HashMap<Integer, Integer> getComponentDCHuffmanMap() {
+		return componentDCHuffmanMap;
+	}
+
+	public HashMap<Integer, Integer> getComponentQuantizedMap() {
+		return componentQuantizedMap;
+	}
+
+	public int getComponentCount() {
+		return componentCount;
+	}
+
+	public void setComponentCount(int componentCount) {
+		this.componentCount = componentCount;
 	}
 
 	public int[][] getLuminanceQuantizedTable() {
@@ -127,20 +154,20 @@ class Main {
 
 						byteData = jpegStream.read();
 						// luminance
-						if(byteData == 0x00){
+						if (byteData == 0x00) {
 							for (int i = 0; i < 8; i++) {
-                                for (int j = 0; j < 8; j++) {
-                                    byteData = jpegStream.read();
-                                    jpegHeader.luminanceQuantizedTable[i][j] = byteData;
-                                }
-                            }
+								for (int j = 0; j < 8; j++) {
+									byteData = jpegStream.read();
+									jpegHeader.luminanceQuantizedTable[i][j] = byteData;
+								}
+							}
 						} else { // chrominance
 							for (int i = 0; i < 8; i++) {
-                                for (int j = 0; j < 8; j++) {
-                                    byteData = jpegStream.read();
-                                    jpegHeader.chrominanceQuantizedTable[i][j] = byteData;
-                                }
-                            }
+								for (int j = 0; j < 8; j++) {
+									byteData = jpegStream.read();
+									jpegHeader.chrominanceQuantizedTable[i][j] = byteData;
+								}
+							}
 						}
 						break;
 
@@ -162,13 +189,13 @@ class Main {
 							if (bitLength == 0)
 								continue;
 
-							for(int j = 0; j < bitLength; j++){
+							for (int j = 0; j < bitLength; j++) {
 								byteData = jpegStream.read();
 								bitSymbolTable.get(i + 1).add(byteData); // i + 1 simply starts from index 1
 							}
 						}
 
-						if(isAC == 0x10){
+						if (isAC == 0x10) {
 							jpegHeader.ACHuffmanTable.add(huffmanTable);
 						} else {
 							jpegHeader.DCHuffmanTable.add(huffmanTable);
@@ -193,7 +220,36 @@ class Main {
 						byteData1 = jpegStream.read();
 						byteData2 = jpegStream.read();
 						markerSize = getMarkerSize(byteData1, byteData2) - 2;
+
+						int componentCount = jpegStream.read();
+						jpegHeader.setComponentCount(componentCount);
+
+						for (int i = 0; i < componentCount; i++) {
+							int componentID = jpegStream.read();
+							byteData = jpegStream.read();
+							int DCHuffmanTableID = (byteData & 0xF0) >> 4;
+							int ACHuffmanTableID = byteData & 0x0F;
+							// System.out.println("ID:" + componentID + ", AC: " + ACHuffmanTableID + ", DC: " + DCHuffmanTableID);
+
+							jpegHeader.getComponentDCHuffmanMap().put(componentID, DCHuffmanTableID);
+							jpegHeader.getComponentACHuffmanMap().put(componentID, ACHuffmanTableID);
+						}
+						markerSize -= (1 + componentCount * 2);
 						jpegStream.readNBytes(jpegHeader.sos, 0, markerSize);
+
+						// print jpeg header componentDCHuffmanMap
+						// System.out.println("component count: " + jpegHeader.getComponentCount());
+						// System.out.println("AC component map");
+						// HashMap<Integer, Integer> map= jpegHeader.getComponentACHuffmanMap();
+						// for(int i = 1; i <= map.size(); i++) {
+						// 	System.out.println("ComponentID: " + i + ", ACHuffmanTableID: " + map.get(i));
+						// }
+						// System.out.println("DC component map");
+						// map= jpegHeader.getComponentDCHuffmanMap();
+						// for(int i = 1; i <= map.size(); i++) {
+						// 	System.out.println("ComponentID: " + i + ", DCHuffmanTableID: " + map.get(i));
+						// }
+						// System.exit(0);
 
 						while (jpegStream.available() > 0) {
 							byteData = jpegStream.read();
@@ -221,23 +277,23 @@ class Main {
 			}
 			jpegStream.close();
 
-			// int[][] chrominance = jpegHeader.getChrominanceQuantizedTable();		
+			// int[][] chrominance = jpegHeader.getChrominanceQuantizedTable();
 			// int[][] luminance = jpegHeader.getLuminanceQuantizedTable();
 			// // loop through luminance table
 			// for (int i = 0; i < 8; i++) {
-			// 	for (int j = 0; j < 8; j++) {
-            //         System.out.print(String.format("0x%X", luminance[i][j]) + " ");
-            //     }
-            //     System.out.println();
-            // }
+			// for (int j = 0; j < 8; j++) {
+			// System.out.print(String.format("0x%X", luminance[i][j]) + " ");
+			// }
+			// System.out.println();
+			// }
 			// System.out.println("-----------------");
 			// // loop through chrominance table
 			// for (int i = 0; i < 8; i++) {
-			// 	for (int j = 0; j < 8; j++) {
-            //         System.out.print(String.format("0x%X", chrominance[i][j]) + " ");
-            //     }
-            //     System.out.println();
-            // }
+			// for (int j = 0; j < 8; j++) {
+			// System.out.print(String.format("0x%X", chrominance[i][j]) + " ");
+			// }
+			// System.out.println();
+			// }
 
 			// loop through ACHuffmanTable
 			List<HuffmanTable> ACHuffmanTable = jpegHeader.getACHuffmanTable();
@@ -245,25 +301,25 @@ class Main {
 			HashMap<Integer, List<Integer>> bitSymbolTable;
 
 			System.out.println(" AC --------------------------------");
-			for(int i = 0; i < ACHuffmanTable.size(); i++){
+			for (int i = 0; i < ACHuffmanTable.size(); i++) {
 				bitSymbolTable = ACHuffmanTable.get(i).getBitSymbolTable();
-				for(int j = 0; j < 16; j++){
+				for (int j = 0; j < 16; j++) {
 					System.out.print(j + 1 + ": ");
-					for(int k = 0; k < bitSymbolTable.get(j + 1).size(); k++){
-                        System.out.print(String.format("0x%X", bitSymbolTable.get(j+1).get(k)) + " ");
-                    }
-                    System.out.println();
+					for (int k = 0; k < bitSymbolTable.get(j + 1).size(); k++) {
+						System.out.print(String.format("0x%X", bitSymbolTable.get(j + 1).get(k)) + " ");
+					}
+					System.out.println();
 				}
 			}
 			System.out.println(" DC --------------------------------");
-			for(int i = 0; i < DCHuffmanTable.size(); i++){
+			for (int i = 0; i < DCHuffmanTable.size(); i++) {
 				bitSymbolTable = DCHuffmanTable.get(i).getBitSymbolTable();
-				for(int j = 0; j < 16; j++){
+				for (int j = 0; j < 16; j++) {
 					System.out.print(j + 1 + ": ");
-					for(int k = 0; k < bitSymbolTable.get(j + 1).size(); k++){
-                        System.out.print(String.format("0x%X", bitSymbolTable.get(j+1).get(k)) + " ");
-                    }
-                    System.out.println();
+					for (int k = 0; k < bitSymbolTable.get(j + 1).size(); k++) {
+						System.out.print(String.format("0x%X", bitSymbolTable.get(j + 1).get(k)) + " ");
+					}
+					System.out.println();
 				}
 			}
 		} catch (Exception e) {
