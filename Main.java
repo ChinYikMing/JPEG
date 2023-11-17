@@ -56,6 +56,10 @@ class HuffmanTable {
 			leftMostIdx = (leftMostIdx << 1) + 1;  // add a new level
         }
 	}
+
+	public int getSymbol(int index){
+		return tree[index];
+	}
 }
 
 class JPEGHeader {
