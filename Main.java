@@ -4,12 +4,17 @@ import java.util.*;
 class HuffmanTable {
 	int ID;
 	HashMap<Integer, List<Integer>> bitSymbolTable;
+	int[] tree; // used to represent the huffman tree
 
 	HuffmanTable(int ID) {
 		this.ID = ID;
 		this.bitSymbolTable = new HashMap<Integer, List<Integer>>();
 		for (int i = 0; i < 16; i++) {
 			this.bitSymbolTable.put(i + 1, new ArrayList<Integer>()); // i + 1 simply starts from index 1
+		}
+		this.tree = new int[131072];
+		for (int i = 0; i < this.tree.length; i++) {
+			this.tree[i] = Integer.MIN_VALUE; // Integer.MIN_VALUE means not reach leaf node
 		}
 	}
 
@@ -19,6 +24,37 @@ class HuffmanTable {
 
 	public HashMap<Integer, List<Integer>> getBitSymbolTable() {
 		return bitSymbolTable;
+	}
+
+	public int[] getTree() {
+		return tree;
+	}
+
+	// build the huffman tree
+	// left child index: 2i + 1
+	// right child index: 2i + 2
+	/*
+	 *        root(0)
+	 *       /    \
+	 *   left(1) right(2)
+	 */
+	public void buildTree() {
+		int leftMostIdx = 1; // the first left most index should be the left child of root node
+		int size;
+		for(int i = 0; i < this.bitSymbolTable.size(); i++) {
+			size = this.bitSymbolTable.get(i + 1).size();
+			if(size == 0){
+				leftMostIdx = (leftMostIdx << 1) + 1;  // add a new level
+				continue;
+			}
+			
+			for(int j = 0; j < size; j++) {
+				this.tree[leftMostIdx] = this.bitSymbolTable.get(i + 1).get(j);
+				leftMostIdx++;
+			}
+
+			leftMostIdx = (leftMostIdx << 1) + 1;  // add a new level
+        }
 	}
 }
 
@@ -206,6 +242,15 @@ class Main {
 								bitSymbolTable.get(i + 1).add(byteData); // i + 1 simply starts from index 1
 							}
 						}
+						// TODO: can be build when building the bitSymbolTable
+						huffmanTable.buildTree();
+						// int[] huffmanTree = huffmanTable.getTree();
+						// for (int i = 0; i < huffmanTable.getTree().length; i++) {
+						// 	if(huffmanTree[i] != Integer.MIN_VALUE){
+						// 		System.out.println("index: " + i + ", value: " + String.format("0x%X", huffmanTree[i]));
+						// 	}
+						// }
+						// System.exit(1);
 
 						if (isAC == 0x10) {
 							jpegHeader.ACHuffmanTable.add(huffmanTable);
@@ -229,28 +274,31 @@ class Main {
 
 						int componentCount = jpegStream.read();
 						jpegHeader.setComponentCount(componentCount);
-						for(int i = 0; i < componentCount; i++) {
+						for (int i = 0; i < componentCount; i++) {
 							int componentID = jpegStream.read();
 							byteData = jpegStream.read();
 							int horizontalSamplingFactor = (byteData & 0xF0) >> 4;
 							int verticalSamplingFactor = byteData & 0x0F;
 							int quantizeID = jpegStream.read();
 
-							jpegHeader.getComponentHorizontalSamplingFactorMap().put(componentID, horizontalSamplingFactor);
+							jpegHeader.getComponentHorizontalSamplingFactorMap().put(componentID,
+									horizontalSamplingFactor);
 							jpegHeader.getComponentVerticalSamplingFactorMap().put(componentID, verticalSamplingFactor);
 							jpegHeader.getComponentQuantizedMap().put(componentID, quantizeID);
 						}
 
-						// HashMap<Integer, Integer> map = jpegHeader.getComponentHorizontalSamplingFactorMap();
-						// HashMap<Integer, Integer> map1 = jpegHeader.getComponentVerticalSamplingFactorMap();
+						// HashMap<Integer, Integer> map =
+						// jpegHeader.getComponentHorizontalSamplingFactorMap();
+						// HashMap<Integer, Integer> map1 =
+						// jpegHeader.getComponentVerticalSamplingFactorMap();
 						// HashMap<Integer, Integer> map2 = jpegHeader.getComponentQuantizedMap();
 						// System.out.println("horizontal sampling factor");
 						// for(int i = 1; i <= map.size(); i++){
-						// 	System.out.println("componentID: " + i);
-						// 	System.out.println("vertical sampling factor: " + map1.get(i));
-						// 	System.out.println("horizontal sampling factor: " + map.get(i));
-						// 	System.out.println("quantize table ID: " + map2.get(i));
-						// 	System.out.println("--------------------------------");
+						// System.out.println("componentID: " + i);
+						// System.out.println("vertical sampling factor: " + map1.get(i));
+						// System.out.println("horizontal sampling factor: " + map.get(i));
+						// System.out.println("quantize table ID: " + map2.get(i));
+						// System.out.println("--------------------------------");
 						// }
 						// System.exit(0);
 						break;
@@ -268,7 +316,8 @@ class Main {
 							byteData = jpegStream.read();
 							int DCHuffmanTableID = (byteData & 0xF0) >> 4;
 							int ACHuffmanTableID = byteData & 0x0F;
-							// System.out.println("ID:" + componentID + ", AC: " + ACHuffmanTableID + ", DC: " + DCHuffmanTableID);
+							// System.out.println("ID:" + componentID + ", AC: " + ACHuffmanTableID + ", DC:
+							// " + DCHuffmanTableID);
 
 							jpegHeader.getComponentDCHuffmanMap().put(componentID, DCHuffmanTableID);
 							jpegHeader.getComponentACHuffmanMap().put(componentID, ACHuffmanTableID);
@@ -281,12 +330,14 @@ class Main {
 						// System.out.println("AC component map");
 						// HashMap<Integer, Integer> map= jpegHeader.getComponentACHuffmanMap();
 						// for(int i = 1; i <= map.size(); i++) {
-						// 	System.out.println("ComponentID: " + i + ", ACHuffmanTableID: " + map.get(i));
+						// System.out.println("ComponentID: " + i + ", ACHuffmanTableID: " +
+						// map.get(i));
 						// }
 						// System.out.println("DC component map");
 						// map= jpegHeader.getComponentDCHuffmanMap();
 						// for(int i = 1; i <= map.size(); i++) {
-						// 	System.out.println("ComponentID: " + i + ", DCHuffmanTableID: " + map.get(i));
+						// System.out.println("ComponentID: " + i + ", DCHuffmanTableID: " +
+						// map.get(i));
 						// }
 						// System.exit(0);
 
