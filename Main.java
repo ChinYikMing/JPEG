@@ -1,6 +1,48 @@
 import java.io.*;
 import java.util.*;
 
+class BitInputStream {
+	List<Integer> data;
+	int byteIndex;
+	int bitIndex;
+
+	BitInputStream(List<Integer> data) {
+		this.data = data;
+		this.byteIndex = 0;
+		this.bitIndex = 7;
+	}
+
+	public int read() {
+		if (byteIndex >= data.size()) {
+			System.out.println("Invalid bit");
+			return -1;
+		}
+
+		int bit = (data.get(byteIndex) >> bitIndex) & 0x1;
+		bitIndex -= 1;
+		if (bitIndex == -1) {
+			bitIndex = 7;
+			byteIndex += 1;
+		}
+
+		return bit;
+	}
+
+	public int readNBits(int n) {
+		int result = 0;
+		for (int i = 0; i < n; i++) {
+			int bit = read();
+			if (bit == -1) {
+				System.out.println("Invalid bit");
+				return -1;
+			}
+			result <<= 1;
+			result |= bit;
+		}
+		return result;
+	}
+}
+
 class HuffmanTable {
 	int ID;
 	HashMap<Integer, List<Integer>> bitSymbolTable;
@@ -34,30 +76,30 @@ class HuffmanTable {
 	// left child index: 2i + 1
 	// right child index: 2i + 2
 	/*
-	 *        root(0)
-	 *       /    \
-	 *   left(1) right(2)
+	 * root(0)
+	 * / \
+	 * left(1) right(2)
 	 */
 	public void buildTree() {
 		int leftMostIdx = 1; // the first left most index should be the left child of root node
 		int size;
-		for(int i = 0; i < this.bitSymbolTable.size(); i++) {
+		for (int i = 0; i < this.bitSymbolTable.size(); i++) {
 			size = this.bitSymbolTable.get(i + 1).size();
-			if(size == 0){
-				leftMostIdx = (leftMostIdx << 1) + 1;  // add a new level
+			if (size == 0) {
+				leftMostIdx = (leftMostIdx << 1) + 1; // add a new level
 				continue;
 			}
-			
-			for(int j = 0; j < size; j++) {
+
+			for (int j = 0; j < size; j++) {
 				this.tree[leftMostIdx] = this.bitSymbolTable.get(i + 1).get(j);
 				leftMostIdx++;
 			}
 
-			leftMostIdx = (leftMostIdx << 1) + 1;  // add a new level
-        }
+			leftMostIdx = (leftMostIdx << 1) + 1; // add a new level
+		}
 	}
 
-	public int getSymbol(int index){
+	public int getSymbol(int index) {
 		return tree[index];
 	}
 }
@@ -250,11 +292,39 @@ class Main {
 						huffmanTable.buildTree();
 						// int[] huffmanTree = huffmanTable.getTree();
 						// for (int i = 0; i < huffmanTable.getTree().length; i++) {
-						// 	if(huffmanTree[i] != Integer.MIN_VALUE){
-						// 		System.out.println("index: " + i + ", value: " + String.format("0x%X", huffmanTree[i]));
-						// 	}
+						// if(huffmanTree[i] != Integer.MIN_VALUE){
+						// System.out.println("index: " + i + ", value: " + String.format("0x%X",
+						// huffmanTree[i]));
+						// }
 						// }
 						// System.exit(1);
+
+						// 0b11110000
+						// 0b10000000
+						// int bitStream = 0b10100000;
+						// int index = 0;
+						// int mask = 0b10000000;
+						// int bit;
+						// int remainingBits = 8;
+						// int symbol = huffmanTable.getSymbol(index);
+						// while(symbol == Integer.MIN_VALUE) {
+						// bit = bitStream & mask;
+						// if(bit == 0){
+						// index = (index << 1) + 1;
+						// } else {
+						// index = (index << 1) + 2;
+						// }
+						// symbol = huffmanTable.getSymbol(index);
+						// mask >>= 1;
+						// remainingBits--;
+						// }
+						// System.out.println("symbol: " + symbol + ", remainingBits: " +
+						// remainingBits);
+						// System.exit(1);
+
+						// 0x16 = 00010110
+						// (1, x), x is integer(positive or negative)
+						// 0110 is 6 so x is 6 bits long, x
 
 						if (isAC == 0x10) {
 							jpegHeader.ACHuffmanTable.add(huffmanTable);
@@ -345,6 +415,7 @@ class Main {
 						// }
 						// System.exit(0);
 
+						// TODO: read once with calculating the exact byte size
 						while (jpegStream.available() > 0) {
 							byteData = jpegStream.read();
 							if (reachMarker(byteData)) {
