@@ -1,6 +1,159 @@
 import java.io.*;
 import java.util.*;
 
+// 8x8 basic block
+class Block {
+	int[] y;
+	int[] cb;
+	int[] cr;
+	int[] r;
+	int[] g;
+	int[] b;
+	int index;
+
+	Block() {
+		this.y = new int[64];
+		this.cb = new int[64];
+		this.cr = new int[64];
+		this.r = new int[64];
+		this.g = new int[64];
+		this.b = new int[64];
+		this.index = 0;
+	}
+
+	public int[] getY() {
+		return y;
+	}
+
+	public int[] getCb() {
+		return cb;
+	}
+
+	public int[] getCr() {
+		return cr;
+	}
+
+	public int[] getR() {
+		return r;
+	}
+
+	public int[] getG() {
+		return g;
+	}
+
+	public int[] getB() {
+		return b;
+	}
+
+	public int getIndex() {
+		return index;
+	}
+
+	public void setIndex(int index) {
+		this.index = index;
+	}
+}
+
+class JPEGDecoder {
+	List<Block> blocks;
+
+	JPEGDecoder() {
+		this.blocks = new ArrayList<Block>();
+	}
+
+	public List<Block> decode(JPEGHeader header) {
+		BitInputStream bitInputStream = new BitInputStream(header.data);
+
+		// first block
+		Block block = new Block();
+
+		for (int i = 1; i < header.getComponents().size(); i++) {
+			Component component = header.getComponents().get(i);
+			// decode DC
+			// (DC length, DC coefficient)
+			System.out.println("data first byte: " + String.format("0x%X", header.data.get(0)));
+			int dcLength = huffmanDecode(header.getDCHuffmanTable().get(component.getDCHuffmanTableID()),
+					bitInputStream);
+			if (dcLength > 11) {
+				System.out.println("Error: Invalid DC coefficent");
+				System.exit(1);
+			}
+			int dcCoeff = bitInputStream.readNBits(dcLength);
+			if (dcLength > 0 && dcCoeff < (1 << (dcLength - 1))) {
+				dcCoeff = dcCoeff - (1 << dcLength) + 1;
+			}
+			block.getY()[0] = dcCoeff;
+			block.setIndex(block.getIndex() + 1);
+			System.out.println("dclength: " + dcLength + ", dcCoeff: " + dcCoeff);
+			// decode AC
+			// while(block.getIndex() < 64) {
+			// int symbol = huffmanDecode(header.getACHuffmanTable().get(0),
+			// bitInputStream);
+			// if(symbol == -1){
+			// System.out.println("Error: invalid AC coefficent");
+			// System.exit(1);
+			// }
+
+			// // (Most significant four bit, Least significant four bit)
+			// // (preceding zero count, AC coefficient)
+
+			// if(symbol == 0x00) { // 63 AC coefficient will be zero
+			// // fill 63 zero in zig-zag order
+			// break;
+			// }
+
+			// int acCoef = symbol & 0x0F;
+			// int precedingZeroCount = symbol >> 4;
+			// if(precedingZeroCount == 0xF0) { // it should be 16 zero even 0xF0 is 15
+			// precedingZeroCount = 16;
+			// }
+
+			// if(block.getIndex() + precedingZeroCount >= 64){
+			// System.out.println("Error: preceding zero count exceeding 8x8 block");
+			// System.exit(1);
+			// }
+
+			// for(int i = 0; i < precedingZeroCount; i++) {
+
+			// }
+			// }
+		}
+
+		blocks.add(block);
+		return blocks;
+	}
+
+	private int huffmanDecode(HuffmanTable huffmanTable, BitInputStream bitInputStream) {
+		int bit;
+		int index = 0;
+		int symbol = huffmanTable.getSymbol(index);
+
+		while (symbol == Integer.MIN_VALUE) {
+			bit = bitInputStream.read();
+			if (bit == 0) {
+				index = (index << 1) + 1;
+			} else {
+				index = (index << 1) + 2;
+			}
+
+			if (index >= huffmanTable.getTree().length)
+				return -1;
+
+			symbol = huffmanTable.getSymbol(index);
+		}
+
+		return symbol;
+	}
+
+	private void dequantize(int[][] quantizedTable) {
+
+	}
+
+	private void IDCT() {
+
+	}
+}
+
 class BitInputStream {
 	List<Integer> data;
 	int byteIndex;
@@ -104,16 +257,72 @@ class HuffmanTable {
 	}
 }
 
+class Component {
+	int ID;
+	int quantizedTableID;
+	int DCHuffmanTableID;
+	int ACHuffmanTableID;
+	int horizontalSamplingFactor;
+	int verticalSamplingFactor;
+
+	Component() {
+
+	}
+
+	public int getHorizontalSamplingFactor() {
+		return horizontalSamplingFactor;
+	}
+
+	public int getVerticalSamplingFactor() {
+		return verticalSamplingFactor;
+	}
+
+	public int getID() {
+		return ID;
+	}
+
+	public int getACHuffmanTableID() {
+		return ACHuffmanTableID;
+	}
+
+	public int getDCHuffmanTableID() {
+		return DCHuffmanTableID;
+	}
+
+	public int getQuantizedTableID() {
+		return quantizedTableID;
+	}
+
+	public void setHorizontalSamplingFactor(int horizontalSamplingFactor) {
+		this.horizontalSamplingFactor = horizontalSamplingFactor;
+	}
+
+	public void setVerticalSamplingFactor(int verticalSamplingFactor) {
+		this.verticalSamplingFactor = verticalSamplingFactor;
+	}
+
+	public void setID(int iD) {
+		ID = iD;
+	}
+
+	public void setACHuffmanTableID(int aCHuffmanTableID) {
+		ACHuffmanTableID = aCHuffmanTableID;
+	}
+
+	public void setDCHuffmanTableID(int dCHuffmanTableID) {
+		DCHuffmanTableID = dCHuffmanTableID;
+	}
+
+	public void setQuantizedTableID(int quantizedTableID) {
+		this.quantizedTableID = quantizedTableID;
+	}
+}
+
 class JPEGHeader {
 	int width;
 	int height;
 	byte[] sos;
-	int componentCount;
-	HashMap<Integer, Integer> componentQuantizedMap;
-	HashMap<Integer, Integer> componentACHuffmanMap;
-	HashMap<Integer, Integer> componentDCHuffmanMap;
-	HashMap<Integer, Integer> componentHorizontalSamplingFactorMap;
-	HashMap<Integer, Integer> componentVerticalSamplingFactorMap;
+	List<Component> components;
 	int[][] luminanceQuantizedTable;
 	int[][] chrominanceQuantizedTable;
 	List<HuffmanTable> DCHuffmanTable;
@@ -122,48 +331,21 @@ class JPEGHeader {
 
 	JPEGHeader() {
 		this.sos = new byte[10];
-		this.componentQuantizedMap = new HashMap<Integer, Integer>();
-		this.componentACHuffmanMap = new HashMap<Integer, Integer>();
-		this.componentDCHuffmanMap = new HashMap<Integer, Integer>();
-		this.componentHorizontalSamplingFactorMap = new HashMap<Integer, Integer>();
-		this.componentVerticalSamplingFactorMap = new HashMap<Integer, Integer>();
 		this.luminanceQuantizedTable = new int[8][8];
 		this.chrominanceQuantizedTable = new int[8][8];
 		this.DCHuffmanTable = new ArrayList<HuffmanTable>();
 		this.ACHuffmanTable = new ArrayList<HuffmanTable>();
 		this.data = new ArrayList<Integer>();
+		this.components = new ArrayList<Component>();
+		this.components.add(null); // since the component ID starts from 1 so padding index 0 with null
 	}
 
 	public void pushData(int value) {
 		data.add(value);
 	}
 
-	public HashMap<Integer, Integer> getComponentACHuffmanMap() {
-		return componentACHuffmanMap;
-	}
-
-	public HashMap<Integer, Integer> getComponentDCHuffmanMap() {
-		return componentDCHuffmanMap;
-	}
-
-	public HashMap<Integer, Integer> getComponentQuantizedMap() {
-		return componentQuantizedMap;
-	}
-
-	public HashMap<Integer, Integer> getComponentHorizontalSamplingFactorMap() {
-		return componentHorizontalSamplingFactorMap;
-	}
-
-	public HashMap<Integer, Integer> getComponentVerticalSamplingFactorMap() {
-		return componentVerticalSamplingFactorMap;
-	}
-
-	public int getComponentCount() {
-		return componentCount;
-	}
-
-	public void setComponentCount(int componentCount) {
-		this.componentCount = componentCount;
+	public List<Component> getComponents() {
+		return components;
 	}
 
 	public int[][] getLuminanceQuantizedTable() {
@@ -211,9 +393,9 @@ class Main {
 		}
 
 		String jpegImageFilename = args[0];
+		JPEGHeader jpegHeader = new JPEGHeader();
 		try {
 			File jpegImage = new File(jpegImageFilename);
-			JPEGHeader jpegHeader = new JPEGHeader();
 			InputStream jpegStream = new FileInputStream(jpegImage);
 
 			int byteData, byteData1, byteData2;
@@ -327,9 +509,9 @@ class Main {
 						// 0110 is 6 so x is 6 bits long, x
 
 						if (isAC == 0x10) {
-							jpegHeader.ACHuffmanTable.add(huffmanTable);
+							jpegHeader.getACHuffmanTable().add(huffmanTable);
 						} else {
-							jpegHeader.DCHuffmanTable.add(huffmanTable);
+							jpegHeader.getDCHuffmanTable().add(huffmanTable);
 						}
 
 						break;
@@ -347,18 +529,22 @@ class Main {
 						jpegHeader.setWidth(getWidth(byteData1, byteData2));
 
 						int componentCount = jpegStream.read();
-						jpegHeader.setComponentCount(componentCount);
+						// jpegHeader.setComponentCount(componentCount);
 						for (int i = 0; i < componentCount; i++) {
+							Component component = new Component();
 							int componentID = jpegStream.read();
 							byteData = jpegStream.read();
 							int horizontalSamplingFactor = (byteData & 0xF0) >> 4;
 							int verticalSamplingFactor = byteData & 0x0F;
 							int quantizeID = jpegStream.read();
 
-							jpegHeader.getComponentHorizontalSamplingFactorMap().put(componentID,
-									horizontalSamplingFactor);
-							jpegHeader.getComponentVerticalSamplingFactorMap().put(componentID, verticalSamplingFactor);
-							jpegHeader.getComponentQuantizedMap().put(componentID, quantizeID);
+							component.setID(componentID);
+							component.setHorizontalSamplingFactor(horizontalSamplingFactor);
+							component.setVerticalSamplingFactor(verticalSamplingFactor);
+							;
+							component.setQuantizedTableID(quantizeID);
+
+							jpegHeader.getComponents().add(component);
 						}
 
 						// HashMap<Integer, Integer> map =
@@ -383,7 +569,6 @@ class Main {
 						markerSize = getMarkerSize(byteData1, byteData2) - 2;
 
 						componentCount = jpegStream.read();
-						jpegHeader.setComponentCount(componentCount);
 
 						for (int i = 0; i < componentCount; i++) {
 							int componentID = jpegStream.read();
@@ -393,8 +578,10 @@ class Main {
 							// System.out.println("ID:" + componentID + ", AC: " + ACHuffmanTableID + ", DC:
 							// " + DCHuffmanTableID);
 
-							jpegHeader.getComponentDCHuffmanMap().put(componentID, DCHuffmanTableID);
-							jpegHeader.getComponentACHuffmanMap().put(componentID, ACHuffmanTableID);
+							jpegHeader.getComponents().get(componentID).setACHuffmanTableID(ACHuffmanTableID);
+							;
+							jpegHeader.getComponents().get(componentID).setDCHuffmanTableID(DCHuffmanTableID);
+							;
 						}
 						markerSize -= (1 + componentCount * 2);
 						jpegStream.readNBytes(jpegHeader.sos, 0, markerSize);
@@ -487,10 +674,27 @@ class Main {
 					System.out.println();
 				}
 			}
+
+			// loop through components
+			// List<Component> components = jpegHeader.getComponents();
+			// for(int i = 1; i < components.size(); i++) {
+			// Component component = components.get(i);
+			// System.out.println("componentID: " + component.getID());
+			// System.out.println("Huffman AC ID: " + component.getACHuffmanTableID());
+			// System.out.println("Huffman DC ID : " + component.getDCHuffmanTableID());
+			// System.out.println("hori sampling: " +
+			// component.getHorizontalSamplingFactor());
+			// System.out.println("ver sampling: " + component.getVerticalSamplingFactor());
+			// System.out.println("quantized ID: " + component.getQuantizedTableID());
+			// System.out.println("------------------------");
+			// }
 		} catch (Exception e) {
 			System.out.println("Cannot read jpeg image");
 			e.printStackTrace();
 		}
+
+		JPEGDecoder jpegDecoder = new JPEGDecoder();
+		jpegDecoder.decode(jpegHeader);
 	}
 
 	public static boolean reachMarker(int byteData) {
