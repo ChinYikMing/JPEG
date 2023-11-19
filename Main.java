@@ -350,13 +350,34 @@ class Component {
 	}
 }
 
+class QuantizationTable {
+	int [] data;
+	int ID;
+
+	QuantizationTable(int ID) {
+		this.data = new int[64];
+		this.ID = ID;
+    }
+
+	public int[] getData() {
+		return data;
+	}
+
+	public int getID() {
+		return ID;
+	}
+
+	public void setID(int iD) {
+		ID = iD;
+	}
+}
+
 class JPEGHeader {
 	int width;
 	int height;
 	byte[] sos;
 	List<Component> components;
-	int[] luminanceQuantizedTable;
-	int[] chrominanceQuantizedTable;
+	List<QuantizationTable> quantizationTable;
 	List<HuffmanTable> DCHuffmanTable;
 	List<HuffmanTable> ACHuffmanTable;
 	List<Integer> data;
@@ -364,8 +385,7 @@ class JPEGHeader {
 
 	JPEGHeader() {
 		this.sos = new byte[10];
-		this.luminanceQuantizedTable = new int[64];
-		this.chrominanceQuantizedTable = new int[64];
+		this.quantizationTable = new ArrayList<QuantizationTable>();
 		this.DCHuffmanTable = new ArrayList<HuffmanTable>();
 		this.ACHuffmanTable = new ArrayList<HuffmanTable>();
 		this.data = new ArrayList<Integer>();
@@ -451,12 +471,12 @@ class JPEGHeader {
 		return components;
 	}
 
-	public int[] getLuminanceQuantizedTable() {
-		return luminanceQuantizedTable;
+	public QuantizationTable getQuantizationTableByID(int ID) {
+		return quantizationTable.get(ID);
 	}
 
-	public int[] getChrominanceQuantizedTable() {
-		return chrominanceQuantizedTable;
+	public List<QuantizationTable> getQuantizationTable() {
+		return quantizationTable;
 	}
 
 	public List<HuffmanTable> getACHuffmanTable() {
@@ -532,20 +552,25 @@ class Main {
 						jpegByteStream.read();
 
 						byteData = jpegByteStream.read();
-						// luminance
-						if (byteData == 0x00) {
+						int is16Bit = (byteData & 0xF0) >> 4;
+						int tableID = byteData & 0x0F;
+						QuantizationTable quantizationTable = new QuantizationTable(tableID);
+
+						if(is16Bit == 0x1) {
 							for (int i = 0; i < 64; i++) {
-								byteData = jpegByteStream.read();
-								jpegHeader.getLuminanceQuantizedTable()[jpegHeader.getIndex2ZigZagMap()
-										.get(i)] = byteData;
+								byteData1 = jpegByteStream.read();
+								byteData2 = jpegByteStream.read();
+								quantizationTable.getData()[jpegHeader.getIndex2ZigZagMap()
+										.get(i)] = (byteData1 << 8) | byteData2;
 							}
-						} else { // chrominance
+						} else { // 8 bit
 							for (int i = 0; i < 64; i++) {
 								byteData = jpegByteStream.read();
-								jpegHeader.getChrominanceQuantizedTable()[jpegHeader.getIndex2ZigZagMap()
+								quantizationTable.getData()[jpegHeader.getIndex2ZigZagMap()
 										.get(i)] = byteData;
 							}
 						}
+						jpegHeader.getQuantizationTable().add(quantizationTable);
 						break;
 
 					// DHT(Define Huffman Table)
@@ -767,6 +792,18 @@ class Main {
 
 		JPEGDecoder jpegDecoder = new JPEGDecoder();
 		jpegDecoder.decode(jpegHeader);
+
+		// List<QuantizationTable> quantizationTableList = jpegHeader.getQuantizationTable();
+		// for(int i = 0; i < quantizationTableList.size(); i++) {
+		// 	QuantizationTable quantizationTable = quantizationTableList.get(i);
+		// 	for(int j = 0; j < 64; j++) {
+		// 		if(j % 8 == 0){
+		// 			System.out.println();
+		// 		}
+
+		// 		System.out.print(quantizationTable.getData()[j] + " ");
+		// 	}
+		// }
 	}
 
 	public static boolean reachMarker(int byteData) {
