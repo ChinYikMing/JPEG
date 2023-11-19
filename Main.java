@@ -132,15 +132,16 @@ class JPEGDecoder {
 						System.out.println("Error: invalid AC coefficent");
 						System.exit(1);
 					}
+					int acCoeff = 0;
 					if (acLength != 0) {
-						int acCoeff = bitInputStream.readNBits(acLength);
+						acCoeff = bitInputStream.readNBits(acLength);
 						if (acCoeff < (1 << (acLength - 1))) {
 							acCoeff = acCoeff - (1 << acLength) + 1;
 						}
-						block.getData()[header.getIndex2ZigZagMap().get(idx)] = acCoeff;
-						idx++;
-						// System.out.println("AC coefficent: " + acCoeff);
 					}
+					block.getData()[header.getIndex2ZigZagMap().get(idx)] = acCoeff;
+					idx++;
+					// System.out.println("AC coefficent: " + acCoeff);
 				}
 				// System.out.println("Done decoding AC value...");
 				blocks.add(block);
@@ -668,7 +669,7 @@ class Main {
 							component.setVerticalSamplingFactor(verticalSamplingFactor);
 							component.setQuantizedTableID(quantizeID);
 
-							System.out.println("hori zontal sampling factor: " + horizontalSamplingFactor
+							System.out.println("horizontal sampling factor: " + horizontalSamplingFactor
 									+ ", vertical sampling factor: " + verticalSamplingFactor);
 
 							jpegHeader.getComponents().add(component);
