@@ -3,18 +3,43 @@ import java.util.*;
 
 // 8x8 basic block
 class Block {
-	int[] data;
+	int[] Y;
+	int[] Cb;
+	int[] Cr;
+	int[] R;
+	int[] G;
+	int[] B;
 
 	Block() {
-		this.data = new int[64];
+		this.Y = new int[64];
+		this.Cb = new int[64];
+		this.Cr = new int[64];
+		this.R = new int[64];
+		this.G = new int[64];
+		this.B = new int[64];
 
 		for (int i = 0; i < 64; i++) {
-			this.data[i] = 0;
+			this.Y[i] = 0;
+			this.Cb[i] = 0;
+			this.Cr[i] = 0;
+
+			// RGB do not need to be initialized 
+			// since they will be filled in color space conversion
 		}
 	}
 
-	public int[] getData() {
-		return data;
+	public int[] getComponentByID(int ID) {
+		switch (ID) {
+        case 1:
+            return this.Y;
+        case 2:
+            return this.Cb;
+        case 3:
+            return this.Cr;
+        default:
+			System.out.println("Invalid component ID: " + ID);
+            return null;
+        }
 	}
 }
 
@@ -31,10 +56,11 @@ class JPEGDecoder {
 		// TODO: padding with not exact 8x8
 		int blockCount = (header.getWidth() * header.getHeight()) / (8 * 8);
 		for (int bc = 0; bc < blockCount; bc++) {
+			Block block = new Block();
 			for (int i = 1; i < header.getComponents().size(); i++) {
 				int idx = 0;
-				Block block = new Block();
 				Component component = header.getComponents().get(i);
+				int componentID = component.getID();
 				// int vMax = component.getVerticalSamplingFactor();
 				// int hMax = component.getHorizontalSamplingFactor();
 
@@ -74,7 +100,7 @@ class JPEGDecoder {
 				if (dcLength > 0 && dcCoeff < (1 << (dcLength - 1))) {
 					dcCoeff = dcCoeff - (1 << dcLength) + 1;
 				}
-				block.getData()[header.getIndex2ZigZagMap().get(idx)] = dcCoeff;
+				block.getComponentByID(componentID)[header.getIndex2ZigZagMap().get(idx)] = dcCoeff;
 				idx++;
 				// System.out.println();
 				// System.out.println("dc length: " + dcLength + ", dcCoeff: " + dcCoeff);
@@ -124,7 +150,7 @@ class JPEGDecoder {
 					}
 
 					for (int j = 0; j < precedingZeroCount; j++, idx++) {
-						block.getData()[header.getIndex2ZigZagMap().get(idx)] = 0;
+						block.getComponentByID(componentID)[header.getIndex2ZigZagMap().get(idx)] = 0;
 					}
 
 					int acLength = symbol & 0x0F;
@@ -139,13 +165,13 @@ class JPEGDecoder {
 							acCoeff = acCoeff - (1 << acLength) + 1;
 						}
 					}
-					block.getData()[header.getIndex2ZigZagMap().get(idx)] = acCoeff;
+					block.getComponentByID(componentID)[header.getIndex2ZigZagMap().get(idx)] = acCoeff;
 					idx++;
 					// System.out.println("AC coefficent: " + acCoeff);
 				}
 				// System.out.println("Done decoding AC value...");
-				blocks.add(block);
 			}
+			blocks.add(block);
 		}
 
 		return blocks;
@@ -174,6 +200,10 @@ class JPEGDecoder {
 		// System.out.println();
 
 		return symbol;
+	}
+
+	public List<Block> getBlocks() {
+		return blocks;
 	}
 
 	private void dequantize(int[][] quantizedTable) {
@@ -793,6 +823,7 @@ class Main {
 
 		JPEGDecoder jpegDecoder = new JPEGDecoder();
 		jpegDecoder.decode(jpegHeader);
+		System.out.println("block count: " + jpegDecoder.getBlocks().size());
 
 		// List<QuantizationTable> quantizationTableList = jpegHeader.getQuantizationTable();
 		// for(int i = 0; i < quantizationTableList.size(); i++) {
