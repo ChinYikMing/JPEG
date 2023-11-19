@@ -28,7 +28,7 @@ class Block {
 		}
 	}
 
-	public int[] getComponentByID(int ID) {
+	public int[] getComponentDataByID(int ID) {
 		switch (ID) {
         case 1:
             return this.Y;
@@ -100,7 +100,7 @@ class JPEGDecoder {
 				if (dcLength > 0 && dcCoeff < (1 << (dcLength - 1))) {
 					dcCoeff = dcCoeff - (1 << dcLength) + 1;
 				}
-				block.getComponentByID(componentID)[header.getIndex2ZigZagMap().get(idx)] = dcCoeff;
+				block.getComponentDataByID(componentID)[header.getIndex2ZigZagMap().get(idx)] = dcCoeff;
 				idx++;
 				// System.out.println();
 				// System.out.println("dc length: " + dcLength + ", dcCoeff: " + dcCoeff);
@@ -150,7 +150,7 @@ class JPEGDecoder {
 					}
 
 					for (int j = 0; j < precedingZeroCount; j++, idx++) {
-						block.getComponentByID(componentID)[header.getIndex2ZigZagMap().get(idx)] = 0;
+						block.getComponentDataByID(componentID)[header.getIndex2ZigZagMap().get(idx)] = 0;
 					}
 
 					int acLength = symbol & 0x0F;
@@ -165,7 +165,7 @@ class JPEGDecoder {
 							acCoeff = acCoeff - (1 << acLength) + 1;
 						}
 					}
-					block.getComponentByID(componentID)[header.getIndex2ZigZagMap().get(idx)] = acCoeff;
+					block.getComponentDataByID(componentID)[header.getIndex2ZigZagMap().get(idx)] = acCoeff;
 					idx++;
 					// System.out.println("AC coefficent: " + acCoeff);
 				}
@@ -206,11 +206,28 @@ class JPEGDecoder {
 		return blocks;
 	}
 
-	private void dequantize(int[][] quantizedTable) {
+	public void dequantize(JPEGHeader header) {
+		for (int i = 0; i < blocks.size(); i++) {
+            Block block = blocks.get(i);
+
+            for (int j = 1; j < header.getComponents().size(); j++) {
+				Component component = header.getComponents().get(j);
+                int[] componentData = block.getComponentDataByID(j);
+				QuantizationTable quantizationTable = header.getQuantizationTableByID(component.getQuantizedTableID());
+				int[] quantizationTableData = quantizationTable.getData();
+
+                for (int k = 0; k < 64; k++) {
+					componentData[k] *= quantizationTableData[k];
+                }
+            }
+        }
+	}
+
+	public void IDCT() {
 
 	}
 
-	private void IDCT() {
+	public void YCbCr2RGB(){
 
 	}
 }
@@ -821,8 +838,14 @@ class Main {
 			e.printStackTrace();
 		}
 
+
 		JPEGDecoder jpegDecoder = new JPEGDecoder();
 		jpegDecoder.decode(jpegHeader);
+		jpegDecoder.dequantize(jpegHeader);
+		jpegDecoder.IDCT();
+		jpegDecoder.YCbCr2RGB();
+		saveBMP(jpegDecoder.getBlocks());
+
 		System.out.println("block count: " + jpegDecoder.getBlocks().size());
 
 		// List<QuantizationTable> quantizationTableList = jpegHeader.getQuantizationTable();
@@ -856,5 +879,9 @@ class Main {
 
 	public static void usage() {
 		System.out.println("Usage: java Main jpeg_filename");
+	}
+
+	public static void saveBMP(List<Block> blocks) {
+
 	}
 }
