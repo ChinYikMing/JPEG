@@ -20,75 +20,9 @@ class Block {
 
 class JPEGDecoder {
 	List<Block> blocks;
-	HashMap<Integer, Integer> index2ZigZagMap;
 
 	JPEGDecoder() {
 		this.blocks = new ArrayList<Block>();
-		this.index2ZigZagMap = new HashMap<Integer, Integer>();
-		this.index2ZigZagMap.put(0, 0);
-		this.index2ZigZagMap.put(1, 1);
-		this.index2ZigZagMap.put(2, 8);
-		this.index2ZigZagMap.put(3, 16);
-		this.index2ZigZagMap.put(4, 9);
-		this.index2ZigZagMap.put(5, 2);
-		this.index2ZigZagMap.put(6, 3);
-		this.index2ZigZagMap.put(7, 10);
-		this.index2ZigZagMap.put(8, 17);
-		this.index2ZigZagMap.put(9, 24);
-		this.index2ZigZagMap.put(10, 32);
-		this.index2ZigZagMap.put(11, 25);
-		this.index2ZigZagMap.put(12, 18);
-		this.index2ZigZagMap.put(13, 11);
-		this.index2ZigZagMap.put(14, 4);
-		this.index2ZigZagMap.put(15, 5);
-		this.index2ZigZagMap.put(16, 12);
-		this.index2ZigZagMap.put(17, 19);
-		this.index2ZigZagMap.put(18, 26);
-		this.index2ZigZagMap.put(19, 33);
-		this.index2ZigZagMap.put(20, 40);
-		this.index2ZigZagMap.put(21, 48);
-		this.index2ZigZagMap.put(22, 41);
-		this.index2ZigZagMap.put(23, 34);
-		this.index2ZigZagMap.put(24, 27);
-		this.index2ZigZagMap.put(25, 20);
-		this.index2ZigZagMap.put(26, 13);
-		this.index2ZigZagMap.put(27, 6);
-		this.index2ZigZagMap.put(28, 7);
-		this.index2ZigZagMap.put(29, 14);
-		this.index2ZigZagMap.put(30, 21);
-		this.index2ZigZagMap.put(31, 28);
-		this.index2ZigZagMap.put(32, 35);
-		this.index2ZigZagMap.put(33, 42);
-		this.index2ZigZagMap.put(34, 49);
-		this.index2ZigZagMap.put(35, 56);
-		this.index2ZigZagMap.put(36, 57);
-		this.index2ZigZagMap.put(37, 50);
-		this.index2ZigZagMap.put(38, 43);
-		this.index2ZigZagMap.put(39, 36);
-		this.index2ZigZagMap.put(40, 29);
-		this.index2ZigZagMap.put(41, 22);
-		this.index2ZigZagMap.put(42, 15);
-		this.index2ZigZagMap.put(43, 23);
-		this.index2ZigZagMap.put(44, 30);
-		this.index2ZigZagMap.put(45, 37);
-		this.index2ZigZagMap.put(46, 44);
-		this.index2ZigZagMap.put(47, 51);
-		this.index2ZigZagMap.put(48, 58);
-		this.index2ZigZagMap.put(49, 59);
-		this.index2ZigZagMap.put(50, 52);
-		this.index2ZigZagMap.put(51, 45);
-		this.index2ZigZagMap.put(52, 38);
-		this.index2ZigZagMap.put(53, 31);
-		this.index2ZigZagMap.put(54, 39);
-		this.index2ZigZagMap.put(55, 46);
-		this.index2ZigZagMap.put(56, 53);
-		this.index2ZigZagMap.put(57, 60);
-		this.index2ZigZagMap.put(58, 61);
-		this.index2ZigZagMap.put(59, 54);
-		this.index2ZigZagMap.put(60, 47);
-		this.index2ZigZagMap.put(61, 55);
-		this.index2ZigZagMap.put(62, 62);
-		this.index2ZigZagMap.put(63, 63);
 	}
 
 	public List<Block> decode(JPEGHeader header) {
@@ -140,7 +74,7 @@ class JPEGDecoder {
 				if (dcLength > 0 && dcCoeff < (1 << (dcLength - 1))) {
 					dcCoeff = dcCoeff - (1 << dcLength) + 1;
 				}
-				block.getData()[index2ZigZagMap.get(idx)] = dcCoeff;
+				block.getData()[header.getIndex2ZigZagMap().get(idx)] = dcCoeff;
 				idx++;
 				// System.out.println();
 				// System.out.println("dc length: " + dcLength + ", dcCoeff: " + dcCoeff);
@@ -190,7 +124,7 @@ class JPEGDecoder {
 					}
 
 					for (int j = 0; j < precedingZeroCount; j++, idx++) {
-						block.getData()[index2ZigZagMap.get(idx)] = 0;
+						block.getData()[header.getIndex2ZigZagMap().get(idx)] = 0;
 					}
 
 					int acLength = symbol & 0x0F;
@@ -203,7 +137,7 @@ class JPEGDecoder {
 						if (acCoeff < (1 << (acLength - 1))) {
 							acCoeff = acCoeff - (1 << acLength) + 1;
 						}
-						block.getData()[index2ZigZagMap.get(idx)] = acCoeff;
+						block.getData()[header.getIndex2ZigZagMap().get(idx)] = acCoeff;
 						idx++;
 						// System.out.println("AC coefficent: " + acCoeff);
 					}
@@ -421,36 +355,107 @@ class JPEGHeader {
 	int height;
 	byte[] sos;
 	List<Component> components;
-	int[][] luminanceQuantizedTable;
-	int[][] chrominanceQuantizedTable;
+	int[] luminanceQuantizedTable;
+	int[] chrominanceQuantizedTable;
 	List<HuffmanTable> DCHuffmanTable;
 	List<HuffmanTable> ACHuffmanTable;
 	List<Integer> data;
+	HashMap<Integer, Integer> index2ZigZagMap;
 
 	JPEGHeader() {
 		this.sos = new byte[10];
-		this.luminanceQuantizedTable = new int[8][8];
-		this.chrominanceQuantizedTable = new int[8][8];
+		this.luminanceQuantizedTable = new int[64];
+		this.chrominanceQuantizedTable = new int[64];
 		this.DCHuffmanTable = new ArrayList<HuffmanTable>();
 		this.ACHuffmanTable = new ArrayList<HuffmanTable>();
 		this.data = new ArrayList<Integer>();
 		this.components = new ArrayList<Component>();
 		this.components.add(null); // since the component ID starts from 1 so padding index 0 with null
+
+		this.index2ZigZagMap = new HashMap<Integer, Integer>();
+		this.index2ZigZagMap.put(0, 0);
+		this.index2ZigZagMap.put(1, 1);
+		this.index2ZigZagMap.put(2, 8);
+		this.index2ZigZagMap.put(3, 16);
+		this.index2ZigZagMap.put(4, 9);
+		this.index2ZigZagMap.put(5, 2);
+		this.index2ZigZagMap.put(6, 3);
+		this.index2ZigZagMap.put(7, 10);
+		this.index2ZigZagMap.put(8, 17);
+		this.index2ZigZagMap.put(9, 24);
+		this.index2ZigZagMap.put(10, 32);
+		this.index2ZigZagMap.put(11, 25);
+		this.index2ZigZagMap.put(12, 18);
+		this.index2ZigZagMap.put(13, 11);
+		this.index2ZigZagMap.put(14, 4);
+		this.index2ZigZagMap.put(15, 5);
+		this.index2ZigZagMap.put(16, 12);
+		this.index2ZigZagMap.put(17, 19);
+		this.index2ZigZagMap.put(18, 26);
+		this.index2ZigZagMap.put(19, 33);
+		this.index2ZigZagMap.put(20, 40);
+		this.index2ZigZagMap.put(21, 48);
+		this.index2ZigZagMap.put(22, 41);
+		this.index2ZigZagMap.put(23, 34);
+		this.index2ZigZagMap.put(24, 27);
+		this.index2ZigZagMap.put(25, 20);
+		this.index2ZigZagMap.put(26, 13);
+		this.index2ZigZagMap.put(27, 6);
+		this.index2ZigZagMap.put(28, 7);
+		this.index2ZigZagMap.put(29, 14);
+		this.index2ZigZagMap.put(30, 21);
+		this.index2ZigZagMap.put(31, 28);
+		this.index2ZigZagMap.put(32, 35);
+		this.index2ZigZagMap.put(33, 42);
+		this.index2ZigZagMap.put(34, 49);
+		this.index2ZigZagMap.put(35, 56);
+		this.index2ZigZagMap.put(36, 57);
+		this.index2ZigZagMap.put(37, 50);
+		this.index2ZigZagMap.put(38, 43);
+		this.index2ZigZagMap.put(39, 36);
+		this.index2ZigZagMap.put(40, 29);
+		this.index2ZigZagMap.put(41, 22);
+		this.index2ZigZagMap.put(42, 15);
+		this.index2ZigZagMap.put(43, 23);
+		this.index2ZigZagMap.put(44, 30);
+		this.index2ZigZagMap.put(45, 37);
+		this.index2ZigZagMap.put(46, 44);
+		this.index2ZigZagMap.put(47, 51);
+		this.index2ZigZagMap.put(48, 58);
+		this.index2ZigZagMap.put(49, 59);
+		this.index2ZigZagMap.put(50, 52);
+		this.index2ZigZagMap.put(51, 45);
+		this.index2ZigZagMap.put(52, 38);
+		this.index2ZigZagMap.put(53, 31);
+		this.index2ZigZagMap.put(54, 39);
+		this.index2ZigZagMap.put(55, 46);
+		this.index2ZigZagMap.put(56, 53);
+		this.index2ZigZagMap.put(57, 60);
+		this.index2ZigZagMap.put(58, 61);
+		this.index2ZigZagMap.put(59, 54);
+		this.index2ZigZagMap.put(60, 47);
+		this.index2ZigZagMap.put(61, 55);
+		this.index2ZigZagMap.put(62, 62);
+		this.index2ZigZagMap.put(63, 63);
 	}
 
 	public void pushData(int value) {
 		data.add(value);
 	}
 
+	public HashMap<Integer, Integer> getIndex2ZigZagMap() {
+		return index2ZigZagMap;
+	}
+
 	public List<Component> getComponents() {
 		return components;
 	}
 
-	public int[][] getLuminanceQuantizedTable() {
+	public int[] getLuminanceQuantizedTable() {
 		return luminanceQuantizedTable;
 	}
 
-	public int[][] getChrominanceQuantizedTable() {
+	public int[] getChrominanceQuantizedTable() {
 		return chrominanceQuantizedTable;
 	}
 
@@ -529,18 +534,16 @@ class Main {
 						byteData = jpegByteStream.read();
 						// luminance
 						if (byteData == 0x00) {
-							for (int i = 0; i < 8; i++) {
-								for (int j = 0; j < 8; j++) {
-									byteData = jpegByteStream.read();
-									jpegHeader.luminanceQuantizedTable[i][j] = byteData;
-								}
+							for (int i = 0; i < 64; i++) {
+								byteData = jpegByteStream.read();
+								jpegHeader.getLuminanceQuantizedTable()[jpegHeader.getIndex2ZigZagMap()
+										.get(i)] = byteData;
 							}
 						} else { // chrominance
-							for (int i = 0; i < 8; i++) {
-								for (int j = 0; j < 8; j++) {
-									byteData = jpegByteStream.read();
-									jpegHeader.chrominanceQuantizedTable[i][j] = byteData;
-								}
+							for (int i = 0; i < 64; i++) {
+								byteData = jpegByteStream.read();
+								jpegHeader.getChrominanceQuantizedTable()[jpegHeader.getIndex2ZigZagMap()
+										.get(i)] = byteData;
 							}
 						}
 						break;
