@@ -1,6 +1,17 @@
 import java.io.*;
 import java.util.*;
 
+import java.awt.image.Raster;
+import java.awt.image.WritableRaster;
+import java.awt.image.DataBuffer;
+import java.awt.image.DataBufferInt;
+import java.awt.image.BufferedImage;
+import java.awt.image.SinglePixelPackedSampleModel;
+import java.awt.Point;
+
+import javax.media.jai.operator.IDCTDescriptor;
+import javax.media.jai.RenderedOp;
+
 // 8x8 basic block
 class Block {
 	int[] Y;
@@ -23,23 +34,23 @@ class Block {
 			this.Cb[i] = 0;
 			this.Cr[i] = 0;
 
-			// RGB do not need to be initialized 
+			// RGB do not need to be initialized
 			// since they will be filled in color space conversion
 		}
 	}
 
 	public int[] getComponentDataByID(int ID) {
 		switch (ID) {
-        case 1:
-            return this.Y;
-        case 2:
-            return this.Cb;
-        case 3:
-            return this.Cr;
-        default:
-			System.out.println("Invalid component ID: " + ID);
-            return null;
-        }
+			case 1:
+				return this.Y;
+			case 2:
+				return this.Cb;
+			case 3:
+				return this.Cr;
+			default:
+				System.out.println("Invalid component ID: " + ID);
+				return null;
+		}
 	}
 }
 
@@ -208,26 +219,59 @@ class JPEGDecoder {
 
 	public void dequantize(JPEGHeader header) {
 		for (int i = 0; i < blocks.size(); i++) {
-            Block block = blocks.get(i);
+			Block block = blocks.get(i);
 
-            for (int j = 1; j < header.getComponents().size(); j++) {
+			for (int j = 1; j < header.getComponents().size(); j++) {
 				Component component = header.getComponents().get(j);
-                int[] componentData = block.getComponentDataByID(j);
+				int[] componentData = block.getComponentDataByID(j);
 				QuantizationTable quantizationTable = header.getQuantizationTableByID(component.getQuantizedTableID());
 				int[] quantizationTableData = quantizationTable.getData();
 
-                for (int k = 0; k < 64; k++) {
+				for (int k = 0; k < 64; k++) {
 					componentData[k] *= quantizationTableData[k];
-                }
-            }
-        }
+				}
+			}
+		}
 	}
 
-	public void IDCT() {
+	public void IDCT(JPEGHeader header) {
+		int componentCount = header.getComponents().size() - 1;
+		BufferedImage bufferedImage = new BufferedImage(8, 8, BufferedImage.TYPE_BYTE_GRAY);
+		DataBuffer dataBuffer;
+		int[] bitMasks = { 0xFF };
+		WritableRaster writableRaster;
+		RenderedOp renderedOp;
+		double[] IDCTResult = new double[64];
 
+		for (int i = 0; i < blocks.size(); i++) {
+			Block block = blocks.get(i);
+			for (int j = 1; j <= componentCount; j++) {
+				int[] data = block.getComponentDataByID(j);
+				dataBuffer = new DataBufferInt(data, data.length);
+				writableRaster = Raster.createWritableRaster(
+						new SinglePixelPackedSampleModel(DataBuffer.TYPE_INT, 8, 8, bitMasks),
+						dataBuffer,
+						new Point(0, 0));
+
+				bufferedImage.setData(writableRaster);
+				renderedOp = IDCTDescriptor.create(bufferedImage, null);
+				renderedOp.getData().getPixels(0, 0, 8, 8, IDCTResult);
+
+				for(int k = 0; k < 64; k++){
+					block.getComponentDataByID(j)[k] = (int) Math.round(IDCTResult[k]);
+				}
+
+				// for(int k = 0; k < 64; k++){
+				// 	if(k % 8 == 0){
+				// 		System.out.println();
+				// 	}
+				// 	System.out.print(block.getComponentDataByID(j)[k] + ", ");
+				// }
+			}
+		}
 	}
 
-	public void YCbCr2RGB(){
+	public void YCbCr2RGB() {
 
 	}
 }
@@ -399,13 +443,13 @@ class Component {
 }
 
 class QuantizationTable {
-	int [] data;
+	int[] data;
 	int ID;
 
 	QuantizationTable(int ID) {
 		this.data = new int[64];
 		this.ID = ID;
-    }
+	}
 
 	public int[] getData() {
 		return data;
@@ -604,7 +648,7 @@ class Main {
 						int tableID = byteData & 0x0F;
 						QuantizationTable quantizationTable = new QuantizationTable(tableID);
 
-						if(is16Bit == 0x1) {
+						if (is16Bit == 0x1) {
 							for (int i = 0; i < 64; i++) {
 								byteData1 = jpegByteStream.read();
 								byteData2 = jpegByteStream.read();
@@ -838,26 +882,26 @@ class Main {
 			e.printStackTrace();
 		}
 
-
 		JPEGDecoder jpegDecoder = new JPEGDecoder();
 		jpegDecoder.decode(jpegHeader);
 		jpegDecoder.dequantize(jpegHeader);
-		jpegDecoder.IDCT();
+		jpegDecoder.IDCT(jpegHeader);
 		jpegDecoder.YCbCr2RGB();
 		saveBMP(jpegDecoder.getBlocks());
 
 		System.out.println("block count: " + jpegDecoder.getBlocks().size());
 
-		// List<QuantizationTable> quantizationTableList = jpegHeader.getQuantizationTable();
+		// List<QuantizationTable> quantizationTableList =
+		// jpegHeader.getQuantizationTable();
 		// for(int i = 0; i < quantizationTableList.size(); i++) {
-		// 	QuantizationTable quantizationTable = quantizationTableList.get(i);
-		// 	for(int j = 0; j < 64; j++) {
-		// 		if(j % 8 == 0){
-		// 			System.out.println();
-		// 		}
+		// QuantizationTable quantizationTable = quantizationTableList.get(i);
+		// for(int j = 0; j < 64; j++) {
+		// if(j % 8 == 0){
+		// System.out.println();
+		// }
 
-		// 		System.out.print(quantizationTable.getData()[j] + " ");
-		// 	}
+		// System.out.print(quantizationTable.getData()[j] + " ");
+		// }
 		// }
 	}
 
