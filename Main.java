@@ -12,9 +12,6 @@ import java.awt.image.SinglePixelPackedSampleModel;
 import java.awt.Point;
 import java.awt.image.DataBufferByte;
 
-import javax.media.jai.operator.IDCTDescriptor;
-import javax.media.jai.RenderedOp;
-
 // 8x8 basic block
 class Block {
 	int[] Y;
@@ -70,7 +67,7 @@ class JPEGDecoder {
 	JPEGDecoder() {
 		this.blocks = new ArrayList<Block>();
 		this.lastDCs = new int[3];
-		for(int i = 0; i < 3; i++) {
+		for (int i = 0; i < 3; i++) {
 			lastDCs[i] = 0;
 		}
 	}
@@ -123,7 +120,7 @@ class JPEGDecoder {
 				int dcLength = huffmanDecode(header.getDCHuffmanTable().get(component.getDCHuffmanTableID()),
 						bitInputStream);
 				if (dcLength > 11) {
-					System.out.println("Error: Invalid DC coefficent");
+					System.out.println("Error: Invalid DC coefficient");
 					System.exit(1);
 				}
 				int dcCoeff = bitInputStream.readNBits(dcLength);
@@ -136,7 +133,7 @@ class JPEGDecoder {
 				idx++;
 				// System.out.println();
 				// System.out.println("dc length: " + dcLength + ", dcCoeff: " + dcCoeff);
-				// System.out.println("DC coefficent: " + dcCoeff);
+				// System.out.println("DC coefficient: " + finalDCCoeff);
 				// System.out.println("Done decoding DC value...");
 				// System.out.println("dclength: " + dcLength + ", dcCoeff: " + dcCoeff);
 
@@ -165,6 +162,7 @@ class JPEGDecoder {
 						// for (; idx < 64; idx++) {
 						// block.getData()[index2ZigZagMap.get(idx)] = 0;
 						// }
+						// System.out.println("AC coefficient: " + 0);
 
 						break;
 					}
@@ -187,7 +185,7 @@ class JPEGDecoder {
 
 					int acLength = symbol & 0x0F;
 					if (acLength > 10) {
-						System.out.println("Error: invalid AC coefficent");
+						System.out.println("Error: invalid AC coefficient");
 						System.exit(1);
 					}
 					int acCoeff = 0;
@@ -199,7 +197,7 @@ class JPEGDecoder {
 					}
 					block.getComponentDataByID(componentID)[header.getIndex2ZigZagMap().get(idx)] = acCoeff;
 					idx++;
-					// System.out.println("AC coefficent: " + acCoeff);
+					// System.out.println("AC coefficient: " + acCoeff);
 				}
 				// System.out.println("Done decoding AC value...");
 			}
@@ -255,39 +253,155 @@ class JPEGDecoder {
 		}
 	}
 
+	private static final float[] IDCT_SCALING_FACTORS = {
+            (float) (2.0 * 4.0 / Math.sqrt(2.0) * 0.0625),
+            (float) (4.0 * Math.cos(Math.PI / 16.0) * 0.125),
+            (float) (4.0 * Math.cos(2.0 * Math.PI / 16.0) * 0.125),
+            (float) (4.0 * Math.cos(3.0 * Math.PI / 16.0) * 0.125),
+            (float) (4.0 * Math.cos(4.0 * Math.PI / 16.0) * 0.125),
+            (float) (4.0 * Math.cos(5.0 * Math.PI / 16.0) * 0.125),
+            (float) (4.0 * Math.cos(6.0 * Math.PI / 16.0) * 0.125),
+            (float) (4.0 * Math.cos(7.0 * Math.PI / 16.0) * 0.125), };
+
+    private static final float A1 = (float) (Math.cos(2.0 * Math.PI / 8.0));
+    private static final float A2 = (float) (Math.cos(Math.PI / 8.0) - Math.cos(3.0 * Math.PI / 8.0));
+    private static final float A3 = A1;
+    private static final float A4 = (float) (Math.cos(Math.PI / 8.0) + Math.cos(3.0 * Math.PI / 8.0));
+    private static final float A5 = (float) (Math.cos(3.0 * Math.PI / 8.0));
+
+    private static final float C2 = (float) (2.0 * Math.cos(Math.PI / 8));
+    private static final float C4 = (float) (2.0 * Math.cos(2 * Math.PI / 8));
+    private static final float C6 = (float) (2.0 * Math.cos(3 * Math.PI / 8));
+    private static final float Q = C2 - C6;
+    private static final float R = C2 + C6;
+
+	public void IDCT8x8(final int[] data) {
+		float[] matrix = new float[data.length];
+		for (int i = 0 ; i < data.length; i++){
+			matrix[i] = (float) data[i];
+		}
+		// System.out.println("before");
+		// for (int k = 0; k < 64; k++) {
+		// 	if (k % 8 == 0) {
+		// 		System.out.println();
+		// 	}
+		// 	System.out.print(matrix[k] + ", ");
+		// }
+        float a2, a3, a4, tmp1, tmp2, a5, a6, a7;
+        float tmp4, neg_b4, b6, b2, b5;
+        float tmp3, n0, n1, n2, n3, neg_n5;
+        float m3, m4, m5, m6, neg_m7;
+
+        for (int i = 0; i < 8; i++) {
+            a2 = matrix[8 * i + 2] - matrix[8 * i + 6];
+            a3 = matrix[8 * i + 2] + matrix[8 * i + 6];
+            a4 = matrix[8 * i + 5] - matrix[8 * i + 3];
+            tmp1 = matrix[8 * i + 1] + matrix[8 * i + 7];
+            tmp2 = matrix[8 * i + 3] + matrix[8 * i + 5];
+            a5 = tmp1 - tmp2;
+            a6 = matrix[8 * i + 1] - matrix[8 * i + 7];
+            a7 = tmp1 + tmp2;
+            tmp4 = C6 * (a4 + a6);
+            neg_b4 = Q * a4 + tmp4;
+            b6 = R * a6 - tmp4;
+            b2 = a2 * C4;
+            b5 = a5 * C4;
+            tmp3 = b6 - a7;
+            n0 = tmp3 - b5;
+            n1 = matrix[8 * i] - matrix[8 * i + 4];
+            n2 = b2 - a3;
+            n3 = matrix[8 * i] + matrix[8 * i + 4];
+            neg_n5 = neg_b4;
+            m3 = n1 + n2;
+            m4 = n3 + a3;
+            m5 = n1 - n2;
+            m6 = n3 - a3;
+            neg_m7 = neg_n5 + n0;
+            matrix[8 * i] = m4 + a7;
+            matrix[8 * i + 1] = m3 + tmp3;
+            matrix[8 * i + 2] = m5 - n0;
+            matrix[8 * i + 3] = m6 + neg_m7;
+            matrix[8 * i + 4] = m6 - neg_m7;
+            matrix[8 * i + 5] = m5 + n0;
+            matrix[8 * i + 6] = m3 - tmp3;
+            matrix[8 * i + 7] = m4 - a7;
+        }
+
+        for (int i = 0; i < 8; i++) {
+            a2 = matrix[16 + i] - matrix[48 + i];
+            a3 = matrix[16 + i] + matrix[48 + i];
+            a4 = matrix[40 + i] - matrix[24 + i];
+            tmp1 = matrix[8 + i] + matrix[56 + i];
+            tmp2 = matrix[24 + i] + matrix[40 + i];
+            a5 = tmp1 - tmp2;
+            a6 = matrix[8 + i] - matrix[56 + i];
+            a7 = tmp1 + tmp2;
+            tmp4 = C6 * (a4 + a6);
+            neg_b4 = Q * a4 + tmp4;
+            b6 = R * a6 - tmp4;
+            b2 = a2 * C4;
+            b5 = a5 * C4;
+            tmp3 = b6 - a7;
+            n0 = tmp3 - b5;
+            n1 = matrix[i] - matrix[32 + i];
+            n2 = b2 - a3;
+            n3 = matrix[i] + matrix[32 + i];
+            neg_n5 = neg_b4;
+            m3 = n1 + n2;
+            m4 = n3 + a3;
+            m5 = n1 - n2;
+            m6 = n3 - a3;
+            neg_m7 = neg_n5 + n0;
+            matrix[i] = m4 + a7;
+            matrix[8 + i] = m3 + tmp3;
+            matrix[16 + i] = m5 - n0;
+            matrix[24 + i] = m6 + neg_m7;
+            matrix[32 + i] = m6 - neg_m7;
+            matrix[40 + i] = m5 + n0;
+            matrix[48 + i] = m3 - tmp3;
+            matrix[56 + i] = m4 - a7;
+        }
+
+		// System.out.println("after");
+		// for (int k = 0; k < 64; k++) {
+		// 	if (k % 8 == 0) {
+		// 		System.out.println();
+		// 	}
+		// 	System.out.print(matrix[k] + ", ");
+		// }
+		for (int k = 0; k < 64; k++) {
+			data[k] = (int) matrix[k];
+		}
+		// System.exit(0);
+    }
+
 	public void IDCT(JPEGHeader header) {
 		int componentCount = header.getComponents().size() - 1;
-		BufferedImage bufferedImage = new BufferedImage(8, 8, BufferedImage.TYPE_BYTE_GRAY);
-		DataBuffer dataBuffer;
-		int[] bitMasks = { 0xFF };
-		WritableRaster writableRaster;
-		RenderedOp renderedOp;
-		double[] IDCTResult = new double[64];
 
 		for (int i = 0; i < blocks.size(); i++) {
 			Block block = blocks.get(i);
 			for (int j = 1; j <= componentCount; j++) {
 				int[] data = block.getComponentDataByID(j);
-				dataBuffer = new DataBufferInt(data, data.length);
-				writableRaster = Raster.createWritableRaster(
-						new SinglePixelPackedSampleModel(DataBuffer.TYPE_INT, 8, 8, bitMasks),
-						dataBuffer,
-						new Point(0, 0));
 
-				bufferedImage.setData(writableRaster);
-				renderedOp = IDCTDescriptor.create(bufferedImage, null);
-				renderedOp.getData().getPixels(0, 0, 8, 8, IDCTResult);
-
-				for (int k = 0; k < 64; k++) {
-					block.getComponentDataByID(j)[k] = (int) Math.round(IDCTResult[k]);
-				}
-
-				// for(int k = 0; k < 64; k++){
-				// if(k % 8 == 0){
+				// System.out.println("Before");
+				// for (int k = 0; k < 64; k++) {
+				// 	if (k % 8 == 0) {
+				// 		System.out.println();
+				// 	}
+				// 	System.out.print(data[k] + ", ");
+				// }
 				// System.out.println();
+
+				IDCT8x8(data);
+
+				// System.out.println("after");
+				// for (int k = 0; k < 64; k++) {
+				// 	if (k % 8 == 0) {
+				// 		System.out.println();
+				// 	}
+				// 	System.out.print(data[k] + ", ");
 				// }
-				// System.out.print(block.getComponentDataByID(j)[k] + ", ");
-				// }
+				// System.exit(0);
 			}
 		}
 	}
@@ -812,8 +926,8 @@ class Main {
 							component.setVerticalSamplingFactor(verticalSamplingFactor);
 							component.setQuantizedTableID(quantizeID);
 
-							System.out.println("horizontal sampling factor: " + horizontalSamplingFactor
-									+ ", vertical sampling factor: " + verticalSamplingFactor);
+							// System.out.println("horizontal sampling factor: " + horizontalSamplingFactor
+							// + ", vertical sampling factor: " + verticalSamplingFactor);
 
 							jpegHeader.getComponents().add(component);
 						}
@@ -845,10 +959,10 @@ class Main {
 							if (reachMarker(byteData2)) {
 								// EOI(End of Image)
 								if (byteData1 == 0xD9) {
-									System.out.println("End of image and size: " + jpegHeader.getData().size());
-									System.out.println(
-											"width:  " + jpegHeader.getWidth() + ", height: " + jpegHeader.getHeight());
-									System.out.println("sos size: " + jpegHeader.sos.length);
+									// System.out.println("End of image and size: " + jpegHeader.getData().size());
+									// System.out.println(
+									// "width: " + jpegHeader.getWidth() + ", height: " + jpegHeader.getHeight());
+									// System.out.println("sos size: " + jpegHeader.sos.length);
 									break;
 								} else if (byteData1 == 0xFF) { // skip multiple consecutive 0xFF
 									continue;
@@ -893,28 +1007,30 @@ class Main {
 			List<HuffmanTable> DCHuffmanTable = jpegHeader.getDCHuffmanTable();
 			HashMap<Integer, List<Integer>> bitSymbolTable;
 
-			System.out.println(" AC --------------------------------");
-			for (int i = 0; i < ACHuffmanTable.size(); i++) {
-				bitSymbolTable = ACHuffmanTable.get(i).getBitSymbolTable();
-				for (int j = 0; j < 16; j++) {
-					System.out.print(j + 1 + ": ");
-					for (int k = 0; k < bitSymbolTable.get(j + 1).size(); k++) {
-						System.out.print(String.format("0x%X", bitSymbolTable.get(j + 1).get(k)) + " ");
-					}
-					System.out.println();
-				}
-			}
-			System.out.println(" DC --------------------------------");
-			for (int i = 0; i < DCHuffmanTable.size(); i++) {
-				bitSymbolTable = DCHuffmanTable.get(i).getBitSymbolTable();
-				for (int j = 0; j < 16; j++) {
-					System.out.print(j + 1 + ": ");
-					for (int k = 0; k < bitSymbolTable.get(j + 1).size(); k++) {
-						System.out.print(String.format("0x%X", bitSymbolTable.get(j + 1).get(k)) + " ");
-					}
-					System.out.println();
-				}
-			}
+			// System.out.println(" AC --------------------------------");
+			// for (int i = 0; i < ACHuffmanTable.size(); i++) {
+			// bitSymbolTable = ACHuffmanTable.get(i).getBitSymbolTable();
+			// for (int j = 0; j < 16; j++) {
+			// System.out.print(j + 1 + ": ");
+			// for (int k = 0; k < bitSymbolTable.get(j + 1).size(); k++) {
+			// System.out.print(String.format("0x%X", bitSymbolTable.get(j + 1).get(k)) + "
+			// ");
+			// }
+			// System.out.println();
+			// }
+			// }
+			// System.out.println(" DC --------------------------------");
+			// for (int i = 0; i < DCHuffmanTable.size(); i++) {
+			// bitSymbolTable = DCHuffmanTable.get(i).getBitSymbolTable();
+			// for (int j = 0; j < 16; j++) {
+			// System.out.print(j + 1 + ": ");
+			// for (int k = 0; k < bitSymbolTable.get(j + 1).size(); k++) {
+			// System.out.print(String.format("0x%X", bitSymbolTable.get(j + 1).get(k)) + "
+			// ");
+			// }
+			// System.out.println();
+			// }
+			// }
 
 			// loop through components
 			// List<Component> components = jpegHeader.getComponents();
@@ -941,7 +1057,7 @@ class Main {
 		jpegDecoder.YCbCr2RGB();
 		saveBMP(jpegImageFilename, jpegHeader.getWidth(), jpegHeader.getHeight(), jpegDecoder.getBlocks());
 
-		System.out.println("block count: " + jpegDecoder.getBlocks().size());
+		// System.out.println("block count: " + jpegDecoder.getBlocks().size());
 
 		// List<QuantizationTable> quantizationTableList =
 		// jpegHeader.getQuantizationTable();
@@ -1054,7 +1170,7 @@ class Main {
 		for (int i = 0; i < maxBlocksCol; i++) {
 			// eight line of rgb
 			for (int o = 0; o < 8; o++) {
-				// line of rgb of maxBlocksRow 
+				// line of rgb of maxBlocksRow
 				for (int j = 0; j < maxBlocksRow; j++) {
 					Block block = blocks.get(blockIndex);
 					int r[] = block.getComponentDataByID(4);
@@ -1070,10 +1186,11 @@ class Main {
 						bufferedImageBytes[idx++] = (byte) b[pixelIndex]; // blue
 						bufferedImageBytes[idx++] = (byte) g[pixelIndex]; // green
 						bufferedImageBytes[idx++] = (byte) r[pixelIndex]; // red
-						// System.out.println("b: " + b[pixelIndex] + ", g: " + g[pixelIndex] + ", r: " + r[pixelIndex]);
+						// System.out.println("b: " + b[pixelIndex] + ", g: " + g[pixelIndex] + ", r: "
+						// + r[pixelIndex]);
 					}
 
-					if((blockIndex + 3) < blocks.size())
+					if ((blockIndex + 3) < blocks.size())
 						blockIndex += 3;
 				}
 
@@ -1084,7 +1201,7 @@ class Main {
 				}
 			}
 		}
-		System.out.println("size: " + rgbData.size());
+		// System.out.println("size: " + rgbData.size());
 		// System.exit(0);
 
 		try {
