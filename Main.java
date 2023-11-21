@@ -1,6 +1,8 @@
 import java.io.*;
 import java.util.*;
 
+import javax.imageio.ImageIO;
+
 import java.awt.image.Raster;
 import java.awt.image.WritableRaster;
 import java.awt.image.DataBuffer;
@@ -8,6 +10,7 @@ import java.awt.image.DataBufferInt;
 import java.awt.image.BufferedImage;
 import java.awt.image.SinglePixelPackedSampleModel;
 import java.awt.Point;
+import java.awt.image.DataBufferByte;
 
 import javax.media.jai.operator.IDCTDescriptor;
 import javax.media.jai.RenderedOp;
@@ -47,6 +50,12 @@ class Block {
 				return this.Cb;
 			case 3:
 				return this.Cr;
+			case 4:
+				return this.R;
+			case 5:
+				return this.G;
+			case 6:
+				return this.B;
 			default:
 				System.out.println("Invalid component ID: " + ID);
 				return null;
@@ -257,22 +266,53 @@ class JPEGDecoder {
 				renderedOp = IDCTDescriptor.create(bufferedImage, null);
 				renderedOp.getData().getPixels(0, 0, 8, 8, IDCTResult);
 
-				for(int k = 0; k < 64; k++){
+				for (int k = 0; k < 64; k++) {
 					block.getComponentDataByID(j)[k] = (int) Math.round(IDCTResult[k]);
 				}
 
 				// for(int k = 0; k < 64; k++){
-				// 	if(k % 8 == 0){
-				// 		System.out.println();
-				// 	}
-				// 	System.out.print(block.getComponentDataByID(j)[k] + ", ");
+				// if(k % 8 == 0){
+				// System.out.println();
+				// }
+				// System.out.print(block.getComponentDataByID(j)[k] + ", ");
 				// }
 			}
 		}
 	}
 
 	public void YCbCr2RGB() {
+		for (int i = 0; i < blocks.size(); i += 3) {
+			Block Y = blocks.get(i);
+			Block Cb = blocks.get(i + 1);
+			Block Cr = blocks.get(i + 2);
 
+			int[] YData = Y.getComponentDataByID(1);
+			int[] CbData = Cb.getComponentDataByID(2);
+			int[] CrData = Cr.getComponentDataByID(3);
+
+			for (int j = 0; j < 64; j++) {
+				int r = (int) (YData[j] + 1.402 * (CrData[j] - 128));
+				int g = (int) (YData[j] - 0.34414 * (CbData[j] - 128) - 0.71414 * (CrData[j] - 128));
+				int b = (int) (YData[j] + 1.772 * (CbData[j] - 128));
+
+				if (r < 0)
+					r = 0;
+				else if (r > 255)
+					r = 255;
+				if (g < 0)
+					g = 0;
+				else if (g > 255)
+					g = 255;
+				if (b < 0)
+					b = 0;
+				else if (b > 255)
+					b = 255;
+
+				Y.getComponentDataByID(4)[j] = r;
+				Y.getComponentDataByID(5)[j] = g;
+				Y.getComponentDataByID(6)[j] = b;
+			}
+		}
 	}
 }
 
@@ -887,7 +927,7 @@ class Main {
 		jpegDecoder.dequantize(jpegHeader);
 		jpegDecoder.IDCT(jpegHeader);
 		jpegDecoder.YCbCr2RGB();
-		saveBMP(jpegDecoder.getBlocks());
+		saveBMP(jpegImageFilename, jpegHeader.getWidth(), jpegHeader.getHeight(), jpegDecoder.getBlocks());
 
 		System.out.println("block count: " + jpegDecoder.getBlocks().size());
 
@@ -925,7 +965,123 @@ class Main {
 		System.out.println("Usage: java Main jpeg_filename");
 	}
 
-	public static void saveBMP(List<Block> blocks) {
+	public static void saveBMP(String filename, int width, int height, List<Block> blocks) {
+		// File file;
+		// BufferedImage image = null;
+		// try {
+		// file = new File(filename);
+		// image = ImageIO.read(file);
+		// }catch(Exception e) {
+		// e.printStackTrace();
+		// }
 
+		// // Get image dimensions
+		// int w= image.getWidth();
+		// int h= image.getHeight();
+		// System.out.println("image width: " + w + ", image height: " + h);
+
+		// // Create a 3D array to store RGB data
+		// int[][][] rgbArray = new int[h][w][3];
+
+		// // Process the image data
+		// for (int y = 0; y < h; y++) {
+		// for (int x = 0; x < w; x++) {
+		// int rgb = image.getRGB(x, y);
+
+		// // Extract RGB components
+		// int red = (rgb >> 16) & 0xFF;
+		// int green = (rgb >> 8) & 0xFF;
+		// int blue = rgb & 0xFF;
+
+		// // Store RGB components in the array
+		// rgbArray[y][x][0] = red; // Red
+		// rgbArray[y][x][1] = green; // Green
+		// rgbArray[y][x][2] = blue; // Blue
+		// }
+		// }
+
+		// BufferedImage bufferedImage = new BufferedImage(width, height,
+		// BufferedImage.TYPE_3BYTE_BGR);
+		// byte[] bufferedImageBytes = ((DataBufferByte)
+		// bufferedImage.getRaster().getDataBuffer()).getData();
+
+		// int pixelIndex = 0;
+		// for (int y = 0; y < h; y++) {
+		// for (int x = 0; x < w; x++) {
+		// for(int i = 2; i >= 0; i--) {
+		// bufferedImageBytes[pixelIndex++] = (byte) rgbArray[y][x][i];
+		// }
+		// }
+		// }
+
+		// {
+		// try {
+		// int dotIndex = filename.lastIndexOf('.');
+		// String basename = (dotIndex == -1) ? filename : filename.substring(0,
+		// dotIndex);
+		// File outputBMP = new File(basename + ".bmp");
+		// ImageIO.write(bufferedImage, "bmp", outputBMP);
+		// } catch (Exception e) {
+		// e.printStackTrace();
+		// }
+		// }
+		// System.exit(0);
+
+		BufferedImage bufferedImage = new BufferedImage(width, height, BufferedImage.TYPE_3BYTE_BGR);
+		byte[] bufferedImageBytes = ((DataBufferByte) bufferedImage.getRaster().getDataBuffer()).getData();
+
+		// // FIXME
+		int maxBlocksCol = width / 8;
+		int maxBlocksRow = height / 8;
+		int prevBlockindex = 0;
+		int blockIndex = 0;
+
+		List<Byte> rgbData = new ArrayList<>();
+		int idx = 0;
+
+		for (int i = 0; i < maxBlocksCol; i++) {
+			// eight line of rgb
+			for (int o = 0; o < 8; o++) {
+				// line of rgb of maxBlocksRow 
+				for (int j = 0; j < maxBlocksRow; j++) {
+					Block block = blocks.get(blockIndex);
+					int r[] = block.getComponentDataByID(4);
+					int g[] = block.getComponentDataByID(5);
+					int b[] = block.getComponentDataByID(6);
+
+					// 0 - 7 , 8 - 15, ..., 56 - 63
+					for (int k = 0; k < 8; k++) {
+						int pixelIndex = (o * 8) + k;
+						rgbData.add((byte) r[pixelIndex]);
+						rgbData.add((byte) g[pixelIndex]);
+						rgbData.add((byte) b[pixelIndex]);
+						bufferedImageBytes[idx++] = (byte) b[pixelIndex]; // blue
+						bufferedImageBytes[idx++] = (byte) g[pixelIndex]; // green
+						bufferedImageBytes[idx++] = (byte) r[pixelIndex]; // red
+						// System.out.println("b: " + b[pixelIndex] + ", g: " + g[pixelIndex] + ", r: " + r[pixelIndex]);
+					}
+
+					if((blockIndex + 3) < blocks.size())
+						blockIndex += 3;
+				}
+
+				if ((o + 1) != 8) {
+					blockIndex = prevBlockindex;
+				} else {
+					prevBlockindex = blockIndex;
+				}
+			}
+		}
+		System.out.println("size: " + rgbData.size());
+		// System.exit(0);
+
+		try {
+			int dotIndex = filename.lastIndexOf('.');
+			String basename = (dotIndex == -1) ? filename : filename.substring(0, dotIndex);
+			File outputBMP = new File(basename + ".bmp");
+			ImageIO.write(bufferedImage, "bmp", outputBMP);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 	}
 }
