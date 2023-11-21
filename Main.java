@@ -65,9 +65,18 @@ class Block {
 
 class JPEGDecoder {
 	List<Block> blocks;
+	int[] lastDCs;
 
 	JPEGDecoder() {
 		this.blocks = new ArrayList<Block>();
+		this.lastDCs = new int[3];
+		for(int i = 0; i < 3; i++) {
+			lastDCs[i] = 0;
+		}
+	}
+
+	public int[] getLastDCs() {
+		return lastDCs;
 	}
 
 	public List<Block> decode(JPEGHeader header) {
@@ -78,6 +87,7 @@ class JPEGDecoder {
 		for (int bc = 0; bc < blockCount; bc++) {
 			Block block = new Block();
 			for (int i = 1; i < header.getComponents().size(); i++) {
+				int lastDC = getLastDCs()[i - 1];
 				int idx = 0;
 				Component component = header.getComponents().get(i);
 				int componentID = component.getID();
@@ -120,7 +130,9 @@ class JPEGDecoder {
 				if (dcLength > 0 && dcCoeff < (1 << (dcLength - 1))) {
 					dcCoeff = dcCoeff - (1 << dcLength) + 1;
 				}
-				block.getComponentDataByID(componentID)[header.getIndex2ZigZagMap().get(idx)] = dcCoeff;
+				int finalDCCoeff = dcCoeff + lastDC;
+				block.getComponentDataByID(componentID)[header.getIndex2ZigZagMap().get(idx)] = finalDCCoeff;
+				getLastDCs()[i - 1] = finalDCCoeff;
 				idx++;
 				// System.out.println();
 				// System.out.println("dc length: " + dcLength + ", dcCoeff: " + dcCoeff);
