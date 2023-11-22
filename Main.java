@@ -845,28 +845,48 @@ class Main {
 					// DHT(Define Huffman Table)
 					case 0xC4:
 						// marker size
-						jpegByteStream.read();
-						jpegByteStream.read();
+						byteData1 = jpegByteStream.read();
+						byteData2 = jpegByteStream.read();
+						markerSize = getMarkerSize(byteData1, byteData2) - 2;
 
-						int tableInfo = jpegByteStream.read();
-						int isAC = tableInfo & 0x10;
-						int ID = tableInfo & 0x01;
-						HuffmanTable huffmanTable = new HuffmanTable(ID);
-						HashMap<Integer, List<Integer>> bitSymbolTable = huffmanTable.getBitSymbolTable();
-						byte[] bytes = jpegByteStream.readNBytes(16);
+						while(markerSize > 0){
+							int tableInfo = jpegByteStream.read();
+							markerSize--;
 
-						for (int i = 0; i < 16; i++) {
-							int bitLength = (int) bytes[i];
-							if (bitLength == 0)
-								continue;
+							int isAC = tableInfo & 0x10;
+							int ID = tableInfo & 0x01;
+							HuffmanTable huffmanTable = new HuffmanTable(ID);
+							HashMap<Integer, List<Integer>> bitSymbolTable = huffmanTable.getBitSymbolTable();
+							byte[] bytes = jpegByteStream.readNBytes(16);
+							markerSize -= 16;
 
-							for (int j = 0; j < bitLength; j++) {
-								byteData = jpegByteStream.read();
-								bitSymbolTable.get(i + 1).add(byteData); // i + 1 simply starts from index 1
+							for (int i = 0; i < 16; i++) {
+								int bitLength = (int) bytes[i];
+								// System.out.print(i+1 + ": ");
+								if (bitLength == 0){
+									// System.out.println();
+									continue;
+								}
+
+								for (int j = 0; j < bitLength; j++) {
+									byteData = jpegByteStream.read();
+									// System.out.print("" + String.format("0x%X", byteData) + ", ");
+									bitSymbolTable.get(i + 1).add(byteData); // i + 1 simply starts from index 1
+									markerSize--;
+								}
+								// System.out.println();
+							}
+
+							// TODO: can be build when building the bitSymbolTable
+							huffmanTable.buildTree();
+
+							if (isAC == 0x10) {
+								jpegHeader.getACHuffmanTable().add(huffmanTable);
+							} else {
+								jpegHeader.getDCHuffmanTable().add(huffmanTable);
 							}
 						}
-						// TODO: can be build when building the bitSymbolTable
-						huffmanTable.buildTree();
+
 						// int[] huffmanTree = huffmanTable.getTree();
 						// for(int i = 0; i < huffmanTree.length; i++) {
 						// 	if(huffmanTree[i] == Integer.MIN_VALUE)
@@ -908,12 +928,6 @@ class Main {
 						// 0x16 = 00010110
 						// (1, x), x is integer(positive or negative)
 						// 0110 is 6 so x is 6 bits long, x
-
-						if (isAC == 0x10) {
-							jpegHeader.getACHuffmanTable().add(huffmanTable);
-						} else {
-							jpegHeader.getDCHuffmanTable().add(huffmanTable);
-						}
 
 						break;
 
