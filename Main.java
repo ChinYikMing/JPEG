@@ -3,13 +3,7 @@ import java.util.*;
 
 import javax.imageio.ImageIO;
 
-import java.awt.image.Raster;
-import java.awt.image.WritableRaster;
-import java.awt.image.DataBuffer;
-import java.awt.image.DataBufferInt;
 import java.awt.image.BufferedImage;
-import java.awt.image.SinglePixelPackedSampleModel;
-import java.awt.Point;
 import java.awt.image.DataBufferByte;
 
 // 8x8 basic block
