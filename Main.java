@@ -11,17 +11,21 @@ class Block {
 	int[] Y;
 	int[] Cb;
 	int[] Cr;
-	int[] R;
-	int[] G;
-	int[] B;
+	int[][][] rgb;
 
 	Block() {
 		this.Y = new int[64];
 		this.Cb = new int[64];
 		this.Cr = new int[64];
-		this.R = new int[64];
-		this.G = new int[64];
-		this.B = new int[64];
+		this.rgb = new int[8][8][3];
+
+		for(int i = 0; i < 8; i++){
+			for(int j = 0; j < 8; j++){
+				for(int k = 0; k < 3; k++){
+					this.rgb[i][j][k] = 0;
+				}
+			}
+		}
 
 		for (int i = 0; i < 64; i++) {
 			this.Y[i] = 0;
@@ -33,6 +37,10 @@ class Block {
 		}
 	}
 
+	public int[][][] getRgb() {
+		return rgb;
+	}
+
 	public int[] getComponentDataByID(int ID) {
 		switch (ID) {
 			case 1:
@@ -41,12 +49,6 @@ class Block {
 				return this.Cb;
 			case 3:
 				return this.Cr;
-			case 4:
-				return this.R;
-			case 5:
-				return this.G;
-			case 6:
-				return this.B;
 			default:
 				System.out.println("Invalid component ID: " + ID);
 				return null;
@@ -72,12 +74,13 @@ class JPEGDecoder {
 
 	public List<Block> decode(JPEGHeader header) {
 		BitInputStream bitInputStream = new BitInputStream(header.data);
+		System.out.println("header data size: " + header.data.size());
 
 		// TODO: padding with not exact 8x8
 		int blockCount = (header.getWidth() * header.getHeight()) / (8 * 8);
 		for (int bc = 0; bc < blockCount; bc++) {
-			Block block = new Block();
 			for (int i = 1; i < header.getComponents().size(); i++) {
+				Block block = new Block();
 				int lastDC = getLastDCs()[i - 1];
 				int idx = 0;
 				Component component = header.getComponents().get(i);
@@ -194,9 +197,11 @@ class JPEGDecoder {
 					// System.out.println("AC coefficient: " + acCoeff);
 				}
 				// System.out.println("Done decoding AC value...");
+				blocks.add(block);
 			}
-			blocks.add(block);
 		}
+		// System.out.println("blocks size:" + blocks.size());
+		// System.exit(0);
 
 		return blocks;
 	}
@@ -248,126 +253,126 @@ class JPEGDecoder {
 	}
 
 	private static final float[] IDCT_SCALING_FACTORS = {
-            (float) (2.0 * 4.0 / Math.sqrt(2.0) * 0.0625),
-            (float) (4.0 * Math.cos(Math.PI / 16.0) * 0.125),
-            (float) (4.0 * Math.cos(2.0 * Math.PI / 16.0) * 0.125),
-            (float) (4.0 * Math.cos(3.0 * Math.PI / 16.0) * 0.125),
-            (float) (4.0 * Math.cos(4.0 * Math.PI / 16.0) * 0.125),
-            (float) (4.0 * Math.cos(5.0 * Math.PI / 16.0) * 0.125),
-            (float) (4.0 * Math.cos(6.0 * Math.PI / 16.0) * 0.125),
-            (float) (4.0 * Math.cos(7.0 * Math.PI / 16.0) * 0.125), };
+			(float) (2.0 * 4.0 / Math.sqrt(2.0) * 0.0625),
+			(float) (4.0 * Math.cos(Math.PI / 16.0) * 0.125),
+			(float) (4.0 * Math.cos(2.0 * Math.PI / 16.0) * 0.125),
+			(float) (4.0 * Math.cos(3.0 * Math.PI / 16.0) * 0.125),
+			(float) (4.0 * Math.cos(4.0 * Math.PI / 16.0) * 0.125),
+			(float) (4.0 * Math.cos(5.0 * Math.PI / 16.0) * 0.125),
+			(float) (4.0 * Math.cos(6.0 * Math.PI / 16.0) * 0.125),
+			(float) (4.0 * Math.cos(7.0 * Math.PI / 16.0) * 0.125), };
 
-    private static final float A1 = (float) (Math.cos(2.0 * Math.PI / 8.0));
-    private static final float A2 = (float) (Math.cos(Math.PI / 8.0) - Math.cos(3.0 * Math.PI / 8.0));
-    private static final float A3 = A1;
-    private static final float A4 = (float) (Math.cos(Math.PI / 8.0) + Math.cos(3.0 * Math.PI / 8.0));
-    private static final float A5 = (float) (Math.cos(3.0 * Math.PI / 8.0));
+	private static final float A1 = (float) (Math.cos(2.0 * Math.PI / 8.0));
+	private static final float A2 = (float) (Math.cos(Math.PI / 8.0) - Math.cos(3.0 * Math.PI / 8.0));
+	private static final float A3 = A1;
+	private static final float A4 = (float) (Math.cos(Math.PI / 8.0) + Math.cos(3.0 * Math.PI / 8.0));
+	private static final float A5 = (float) (Math.cos(3.0 * Math.PI / 8.0));
 
-    private static final float C2 = (float) (2.0 * Math.cos(Math.PI / 8));
-    private static final float C4 = (float) (2.0 * Math.cos(2 * Math.PI / 8));
-    private static final float C6 = (float) (2.0 * Math.cos(3 * Math.PI / 8));
-    private static final float Q = C2 - C6;
-    private static final float R = C2 + C6;
+	private static final float C2 = (float) (2.0 * Math.cos(Math.PI / 8));
+	private static final float C4 = (float) (2.0 * Math.cos(2 * Math.PI / 8));
+	private static final float C6 = (float) (2.0 * Math.cos(3 * Math.PI / 8));
+	private static final float Q = C2 - C6;
+	private static final float R = C2 + C6;
 
 	public void IDCT8x8(final int[] data) {
 		float[] matrix = new float[data.length];
-		for (int i = 0 ; i < data.length; i++){
+		for (int i = 0; i < data.length; i++) {
 			matrix[i] = (float) data[i];
 		}
 		// System.out.println("before");
 		// for (int k = 0; k < 64; k++) {
-		// 	if (k % 8 == 0) {
-		// 		System.out.println();
-		// 	}
-		// 	System.out.print(matrix[k] + ", ");
+		// if (k % 8 == 0) {
+		// System.out.println();
 		// }
-        float a2, a3, a4, tmp1, tmp2, a5, a6, a7;
-        float tmp4, neg_b4, b6, b2, b5;
-        float tmp3, n0, n1, n2, n3, neg_n5;
-        float m3, m4, m5, m6, neg_m7;
+		// System.out.print(matrix[k] + ", ");
+		// }
+		float a2, a3, a4, tmp1, tmp2, a5, a6, a7;
+		float tmp4, neg_b4, b6, b2, b5;
+		float tmp3, n0, n1, n2, n3, neg_n5;
+		float m3, m4, m5, m6, neg_m7;
 
-        for (int i = 0; i < 8; i++) {
-            a2 = matrix[8 * i + 2] - matrix[8 * i + 6];
-            a3 = matrix[8 * i + 2] + matrix[8 * i + 6];
-            a4 = matrix[8 * i + 5] - matrix[8 * i + 3];
-            tmp1 = matrix[8 * i + 1] + matrix[8 * i + 7];
-            tmp2 = matrix[8 * i + 3] + matrix[8 * i + 5];
-            a5 = tmp1 - tmp2;
-            a6 = matrix[8 * i + 1] - matrix[8 * i + 7];
-            a7 = tmp1 + tmp2;
-            tmp4 = C6 * (a4 + a6);
-            neg_b4 = Q * a4 + tmp4;
-            b6 = R * a6 - tmp4;
-            b2 = a2 * C4;
-            b5 = a5 * C4;
-            tmp3 = b6 - a7;
-            n0 = tmp3 - b5;
-            n1 = matrix[8 * i] - matrix[8 * i + 4];
-            n2 = b2 - a3;
-            n3 = matrix[8 * i] + matrix[8 * i + 4];
-            neg_n5 = neg_b4;
-            m3 = n1 + n2;
-            m4 = n3 + a3;
-            m5 = n1 - n2;
-            m6 = n3 - a3;
-            neg_m7 = neg_n5 + n0;
-            matrix[8 * i] = m4 + a7;
-            matrix[8 * i + 1] = m3 + tmp3;
-            matrix[8 * i + 2] = m5 - n0;
-            matrix[8 * i + 3] = m6 + neg_m7;
-            matrix[8 * i + 4] = m6 - neg_m7;
-            matrix[8 * i + 5] = m5 + n0;
-            matrix[8 * i + 6] = m3 - tmp3;
-            matrix[8 * i + 7] = m4 - a7;
-        }
+		for (int i = 0; i < 8; i++) {
+			a2 = matrix[8 * i + 2] - matrix[8 * i + 6];
+			a3 = matrix[8 * i + 2] + matrix[8 * i + 6];
+			a4 = matrix[8 * i + 5] - matrix[8 * i + 3];
+			tmp1 = matrix[8 * i + 1] + matrix[8 * i + 7];
+			tmp2 = matrix[8 * i + 3] + matrix[8 * i + 5];
+			a5 = tmp1 - tmp2;
+			a6 = matrix[8 * i + 1] - matrix[8 * i + 7];
+			a7 = tmp1 + tmp2;
+			tmp4 = C6 * (a4 + a6);
+			neg_b4 = Q * a4 + tmp4;
+			b6 = R * a6 - tmp4;
+			b2 = a2 * C4;
+			b5 = a5 * C4;
+			tmp3 = b6 - a7;
+			n0 = tmp3 - b5;
+			n1 = matrix[8 * i] - matrix[8 * i + 4];
+			n2 = b2 - a3;
+			n3 = matrix[8 * i] + matrix[8 * i + 4];
+			neg_n5 = neg_b4;
+			m3 = n1 + n2;
+			m4 = n3 + a3;
+			m5 = n1 - n2;
+			m6 = n3 - a3;
+			neg_m7 = neg_n5 + n0;
+			matrix[8 * i] = m4 + a7;
+			matrix[8 * i + 1] = m3 + tmp3;
+			matrix[8 * i + 2] = m5 - n0;
+			matrix[8 * i + 3] = m6 + neg_m7;
+			matrix[8 * i + 4] = m6 - neg_m7;
+			matrix[8 * i + 5] = m5 + n0;
+			matrix[8 * i + 6] = m3 - tmp3;
+			matrix[8 * i + 7] = m4 - a7;
+		}
 
-        for (int i = 0; i < 8; i++) {
-            a2 = matrix[16 + i] - matrix[48 + i];
-            a3 = matrix[16 + i] + matrix[48 + i];
-            a4 = matrix[40 + i] - matrix[24 + i];
-            tmp1 = matrix[8 + i] + matrix[56 + i];
-            tmp2 = matrix[24 + i] + matrix[40 + i];
-            a5 = tmp1 - tmp2;
-            a6 = matrix[8 + i] - matrix[56 + i];
-            a7 = tmp1 + tmp2;
-            tmp4 = C6 * (a4 + a6);
-            neg_b4 = Q * a4 + tmp4;
-            b6 = R * a6 - tmp4;
-            b2 = a2 * C4;
-            b5 = a5 * C4;
-            tmp3 = b6 - a7;
-            n0 = tmp3 - b5;
-            n1 = matrix[i] - matrix[32 + i];
-            n2 = b2 - a3;
-            n3 = matrix[i] + matrix[32 + i];
-            neg_n5 = neg_b4;
-            m3 = n1 + n2;
-            m4 = n3 + a3;
-            m5 = n1 - n2;
-            m6 = n3 - a3;
-            neg_m7 = neg_n5 + n0;
-            matrix[i] = m4 + a7;
-            matrix[8 + i] = m3 + tmp3;
-            matrix[16 + i] = m5 - n0;
-            matrix[24 + i] = m6 + neg_m7;
-            matrix[32 + i] = m6 - neg_m7;
-            matrix[40 + i] = m5 + n0;
-            matrix[48 + i] = m3 - tmp3;
-            matrix[56 + i] = m4 - a7;
-        }
+		for (int i = 0; i < 8; i++) {
+			a2 = matrix[16 + i] - matrix[48 + i];
+			a3 = matrix[16 + i] + matrix[48 + i];
+			a4 = matrix[40 + i] - matrix[24 + i];
+			tmp1 = matrix[8 + i] + matrix[56 + i];
+			tmp2 = matrix[24 + i] + matrix[40 + i];
+			a5 = tmp1 - tmp2;
+			a6 = matrix[8 + i] - matrix[56 + i];
+			a7 = tmp1 + tmp2;
+			tmp4 = C6 * (a4 + a6);
+			neg_b4 = Q * a4 + tmp4;
+			b6 = R * a6 - tmp4;
+			b2 = a2 * C4;
+			b5 = a5 * C4;
+			tmp3 = b6 - a7;
+			n0 = tmp3 - b5;
+			n1 = matrix[i] - matrix[32 + i];
+			n2 = b2 - a3;
+			n3 = matrix[i] + matrix[32 + i];
+			neg_n5 = neg_b4;
+			m3 = n1 + n2;
+			m4 = n3 + a3;
+			m5 = n1 - n2;
+			m6 = n3 - a3;
+			neg_m7 = neg_n5 + n0;
+			matrix[i] = m4 + a7;
+			matrix[8 + i] = m3 + tmp3;
+			matrix[16 + i] = m5 - n0;
+			matrix[24 + i] = m6 + neg_m7;
+			matrix[32 + i] = m6 - neg_m7;
+			matrix[40 + i] = m5 + n0;
+			matrix[48 + i] = m3 - tmp3;
+			matrix[56 + i] = m4 - a7;
+		}
 
 		// System.out.println("after");
 		// for (int k = 0; k < 64; k++) {
-		// 	if (k % 8 == 0) {
-		// 		System.out.println();
-		// 	}
-		// 	System.out.print(matrix[k] + ", ");
+		// if (k % 8 == 0) {
+		// System.out.println();
+		// }
+		// System.out.print(matrix[k] + ", ");
 		// }
 		for (int k = 0; k < 64; k++) {
 			data[k] = (int) matrix[k];
 		}
 		// System.exit(0);
-    }
+	}
 
 	public void IDCT(JPEGHeader header) {
 		int componentCount = header.getComponents().size() - 1;
@@ -379,10 +384,10 @@ class JPEGDecoder {
 
 				// System.out.println("Before");
 				// for (int k = 0; k < 64; k++) {
-				// 	if (k % 8 == 0) {
-				// 		System.out.println();
-				// 	}
-				// 	System.out.print(data[k] + ", ");
+				// if (k % 8 == 0) {
+				// System.out.println();
+				// }
+				// System.out.print(data[k] + ", ");
 				// }
 				// System.out.println();
 
@@ -390,10 +395,10 @@ class JPEGDecoder {
 
 				// System.out.println("after");
 				// for (int k = 0; k < 64; k++) {
-				// 	if (k % 8 == 0) {
-				// 		System.out.println();
-				// 	}
-				// 	System.out.print(data[k] + ", ");
+				// if (k % 8 == 0) {
+				// System.out.println();
+				// }
+				// System.out.print(data[k] + ", ");
 				// }
 				// System.exit(0);
 			}
@@ -409,6 +414,9 @@ class JPEGDecoder {
 			int[] YData = Y.getComponentDataByID(1);
 			int[] CbData = Cb.getComponentDataByID(2);
 			int[] CrData = Cr.getComponentDataByID(3);
+			int[][][] rgbData = Y.getRgb();
+			int rowIdx = 0;
+			int colIdx = 0;
 
 			for (int j = 0; j < 64; j++) {
 				int r = (int) (YData[j] + 1.402 * (CrData[j] - 128));
@@ -428,9 +436,11 @@ class JPEGDecoder {
 				else if (b > 255)
 					b = 255;
 
-				Y.getComponentDataByID(4)[j] = r;
-				Y.getComponentDataByID(5)[j] = g;
-				Y.getComponentDataByID(6)[j] = b;
+				rowIdx = j / 8;
+				colIdx = j % 8;
+				rgbData[rowIdx][colIdx][0] = r;
+				rgbData[rowIdx][colIdx][1] = g;
+				rgbData[rowIdx][colIdx][2] = b;
 			}
 		}
 	}
@@ -823,6 +833,13 @@ class Main {
 							}
 						}
 						jpegHeader.getQuantizationTable().add(quantizationTable);
+						// for(int i = 0; i < 64; i++){
+						// 	if(i % 8 == 0){
+						// 		System.out.println();
+						// 	}
+						// 	System.out.print("" + quantizationTable.getData()[i] + '\t');
+						// }
+						// System.out.println();
 						break;
 
 					// DHT(Define Huffman Table)
@@ -850,6 +867,12 @@ class Main {
 						}
 						// TODO: can be build when building the bitSymbolTable
 						huffmanTable.buildTree();
+						// int[] huffmanTree = huffmanTable.getTree();
+						// for(int i = 0; i < huffmanTree.length; i++) {
+						// 	if(huffmanTree[i] == Integer.MIN_VALUE)
+						// 		continue;
+						// 	System.out.println(" " + huffmanTree[i]);
+						// }
 						// int[] huffmanTree = huffmanTable.getTree();
 						// for (int i = 0; i < huffmanTable.getTree().length; i++) {
 						// if(huffmanTree[i] != Integer.MIN_VALUE){
@@ -1088,66 +1111,88 @@ class Main {
 	}
 
 	public static void saveBMP(String filename, int width, int height, List<Block> blocks) {
-		// File file;
-		// BufferedImage image = null;
-		// try {
-		// file = new File(filename);
-		// image = ImageIO.read(file);
-		// }catch(Exception e) {
-		// e.printStackTrace();
-		// }
+		File file;
+		BufferedImage image = null;
+		try {
+			file = new File(filename);
+			image = ImageIO.read(file);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 
-		// // Get image dimensions
-		// int w= image.getWidth();
-		// int h= image.getHeight();
-		// System.out.println("image width: " + w + ", image height: " + h);
+		int[][][] rgbArray = new int[height][width][3];
+		for (int y = 0; y < height; y++) {
+			for (int x = 0; x < width; x++) {
+				int rgb = image.getRGB(x, y);
 
-		// // Create a 3D array to store RGB data
-		// int[][][] rgbArray = new int[h][w][3];
+				// Extract RGB components
+				int red = (rgb >> 16) & 0xFF;
+				int green = (rgb >> 8) & 0xFF;
+				int blue = rgb & 0xFF;
 
-		// // Process the image data
-		// for (int y = 0; y < h; y++) {
-		// for (int x = 0; x < w; x++) {
-		// int rgb = image.getRGB(x, y);
+				// Store RGB components in the array
+				rgbArray[y][x][0] = red;    // Red
+				rgbArray[y][x][1] = green;  // Green
+				rgbArray[y][x][2] = blue;   // Blue
+			}
+		}
 
-		// // Extract RGB components
-		// int red = (rgb >> 16) & 0xFF;
-		// int green = (rgb >> 8) & 0xFF;
-		// int blue = rgb & 0xFF;
+		// Get image dimensions
+		int w = image.getWidth();
+		int h = image.getHeight();
+		System.out.println("image width: " + w + ", image height: " + h);
 
-		// // Store RGB components in the array
-		// rgbArray[y][x][0] = red; // Red
-		// rgbArray[y][x][1] = green; // Green
-		// rgbArray[y][x][2] = blue; // Blue
-		// }
-		// }
+		// Create a 3D array to store RGB data
+		BufferedImage bufferedImage2 = new BufferedImage(width, height,
+				BufferedImage.TYPE_3BYTE_BGR);
+		byte[] bufferedImageBytes2 = ((DataBufferByte) bufferedImage2.getRaster().getDataBuffer()).getData();
 
-		// BufferedImage bufferedImage = new BufferedImage(width, height,
-		// BufferedImage.TYPE_3BYTE_BGR);
-		// byte[] bufferedImageBytes = ((DataBufferByte)
-		// bufferedImage.getRaster().getDataBuffer()).getData();
+		int maxBlocksCol2 = width / 8;
+		int maxBlocksRow2 = height / 8;
+		int blockIndex = 0;
+		int prevBlockIndex = 0;
+		int idx = 0;
 
-		// int pixelIndex = 0;
-		// for (int y = 0; y < h; y++) {
-		// for (int x = 0; x < w; x++) {
-		// for(int i = 2; i >= 0; i--) {
-		// bufferedImageBytes[pixelIndex++] = (byte) rgbArray[y][x][i];
-		// }
-		// }
-		// }
+		// System.out.println("maxBlockRow2: " + maxBlocksRow2);
+		for(int i = 0; i < maxBlocksRow2; i++){
+			for(int k = 0; k < 8; k++){ // row
+				blockIndex = prevBlockIndex;
+				// System.out.println("startBlockIndex: " + blockIndex);
+				for(int j = 0; j < maxBlocksCol2; j++){
+					Block block = blocks.get(blockIndex);
+					int rgb_[][][] = block.getRgb();
+					for(int l = 0; l < 8; l++){ // col
+						for(int o = 2; o >= 0; o--){ // channel
+							bufferedImageBytes2[idx++] = (byte) rgb_[k][l][o];
+							// System.out.print(rgb_[k][l][o] + " ");
+						}
+					}
+					// if((blockIndex + 3) < blocks.size())
+					blockIndex += 3;
+					// System.out.println("j: " + j);
+				}
+				// System.out.println("idx: " + idx);
+				// System.out.println("reset blockIndex");
+				// System.out.println();
+			}
+			// System.out.println("idx: " + idx + ", i: " + i + ", finishBlockIndex: " + blockIndex);
+			prevBlockIndex = blockIndex;
+		}
+		// System.out.println("idx: " + idx);
 
-		// {
-		// try {
-		// int dotIndex = filename.lastIndexOf('.');
-		// String basename = (dotIndex == -1) ? filename : filename.substring(0,
-		// dotIndex);
-		// File outputBMP = new File(basename + ".bmp");
-		// ImageIO.write(bufferedImage, "bmp", outputBMP);
-		// } catch (Exception e) {
-		// e.printStackTrace();
-		// }
-		// }
-		// System.exit(0);
+		{
+			try {
+				int dotIndex = filename.lastIndexOf('.');
+				String basename = (dotIndex == -1) ? filename
+						: filename.substring(0,
+								dotIndex);
+				File outputBMP = new File(basename + ".bmp");
+				ImageIO.write(bufferedImage2, "bmp", outputBMP);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+		System.exit(0);
 
 		BufferedImage bufferedImage = new BufferedImage(width, height, BufferedImage.TYPE_3BYTE_BGR);
 		byte[] bufferedImageBytes = ((DataBufferByte) bufferedImage.getRaster().getDataBuffer()).getData();
@@ -1155,46 +1200,46 @@ class Main {
 		// // FIXME
 		int maxBlocksCol = width / 8;
 		int maxBlocksRow = height / 8;
-		int prevBlockindex = 0;
-		int blockIndex = 0;
+		// int prevBlockindex = 0;
+		// int blockIndex = 0;
 
-		List<Byte> rgbData = new ArrayList<>();
-		int idx = 0;
+		// List<Byte> rgbData = new ArrayList<>();
+		// int idx = 0;
 
-		for (int i = 0; i < maxBlocksCol; i++) {
-			// eight line of rgb
-			for (int o = 0; o < 8; o++) {
-				// line of rgb of maxBlocksRow
-				for (int j = 0; j < maxBlocksRow; j++) {
-					Block block = blocks.get(blockIndex);
-					int r[] = block.getComponentDataByID(4);
-					int g[] = block.getComponentDataByID(5);
-					int b[] = block.getComponentDataByID(6);
+		// for (int i = 0; i < maxBlocksCol; i++) {
+		// 	// eight line of rgb
+		// 	for (int o = 0; o < 8; o++) {
+		// 		// line of rgb of maxBlocksRow
+		// 		for (int j = 0; j < maxBlocksRow; j++) {
+		// 			Block block = blocks.get(blockIndex);
+		// 			int r[] = block.getComponentDataByID(4);
+		// 			int g[] = block.getComponentDataByID(5);
+		// 			int b[] = block.getComponentDataByID(6);
 
-					// 0 - 7 , 8 - 15, ..., 56 - 63
-					for (int k = 0; k < 8; k++) {
-						int pixelIndex = (o * 8) + k;
-						rgbData.add((byte) r[pixelIndex]);
-						rgbData.add((byte) g[pixelIndex]);
-						rgbData.add((byte) b[pixelIndex]);
-						bufferedImageBytes[idx++] = (byte) b[pixelIndex]; // blue
-						bufferedImageBytes[idx++] = (byte) g[pixelIndex]; // green
-						bufferedImageBytes[idx++] = (byte) r[pixelIndex]; // red
-						// System.out.println("b: " + b[pixelIndex] + ", g: " + g[pixelIndex] + ", r: "
-						// + r[pixelIndex]);
-					}
+		// 			// 0 - 7 , 8 - 15, ..., 56 - 63
+		// 			for (int k = 0; k < 8; k++) {
+		// 				int pixelIndex = (o * 8) + k;
+		// 				rgbData.add((byte) r[pixelIndex]);
+		// 				rgbData.add((byte) g[pixelIndex]);
+		// 				rgbData.add((byte) b[pixelIndex]);
+		// 				bufferedImageBytes[idx++] = (byte) b[pixelIndex]; // blue
+		// 				bufferedImageBytes[idx++] = (byte) g[pixelIndex]; // green
+		// 				bufferedImageBytes[idx++] = (byte) r[pixelIndex]; // red
+		// 				// System.out.println("b: " + b[pixelIndex] + ", g: " + g[pixelIndex] + ", r: "
+		// 				// + r[pixelIndex]);
+		// 			}
 
-					if ((blockIndex + 3) < blocks.size())
-						blockIndex += 3;
-				}
+		// 			if ((blockIndex + 3) < blocks.size())
+		// 				blockIndex += 3;
+		// 		}
 
-				if ((o + 1) != 8) {
-					blockIndex = prevBlockindex;
-				} else {
-					prevBlockindex = blockIndex;
-				}
-			}
-		}
+		// 		if ((o + 1) != 8) {
+		// 			blockIndex = prevBlockindex;
+		// 		} else {
+		// 			prevBlockindex = blockIndex;
+		// 		}
+		// 	}
+		// }
 		// System.out.println("size: " + rgbData.size());
 		// System.exit(0);
 

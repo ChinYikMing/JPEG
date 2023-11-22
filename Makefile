@@ -3,4 +3,5 @@ all:
 	java  Main $(JPEG)
 
 clean:
-	rm Main.class
+	rm *.class
+	rm *.bmp
