@@ -19,9 +19,9 @@ class Block {
 		this.Cr = new int[64];
 		this.rgb = new int[8][8][3];
 
-		for(int i = 0; i < 8; i++){
-			for(int j = 0; j < 8; j++){
-				for(int k = 0; k < 3; k++){
+		for (int i = 0; i < 8; i++) {
+			for (int j = 0; j < 8; j++) {
+				for (int k = 0; k < 3; k++) {
 					this.rgb[i][j][k] = 0;
 				}
 			}
@@ -74,135 +74,103 @@ class JPEGDecoder {
 
 	public List<Block> decode(JPEGHeader header) {
 		BitInputStream bitInputStream = new BitInputStream(header.data);
-		System.out.println("header data size: " + header.data.size());
+		int horizontalBlockCount = header.getHorizontalBlockCount();
+		int verticalBlockCount = header.getVerticalBlockCount();
 
-		// TODO: padding with not exact 8x8
-		int blockCount = (header.getWidth() * header.getHeight()) / (8 * 8);
-		for (int bc = 0; bc < blockCount; bc++) {
-			for (int i = 1; i < header.getComponents().size(); i++) {
-				Block block = new Block();
-				int lastDC = getLastDCs()[i - 1];
-				int idx = 0;
-				Component component = header.getComponents().get(i);
-				int componentID = component.getID();
-				// int vMax = component.getVerticalSamplingFactor();
-				// int hMax = component.getHorizontalSamplingFactor();
+		if (header.getHorizontalSamplingFactor() == 2 && header.getWidth() % 2 != 0) {
+			horizontalBlockCount += 1;
+		}
+		if (header.getVerticalSamplingFactor() == 2 && header.getHeight() % 2 != 0) {
+			verticalBlockCount += 1;
+		}
+		for (int i = 0; i < horizontalBlockCount * verticalBlockCount; i++) {
+			blocks.add(new Block());
+		}
 
-				// decode DC
-				// (DC length, DC coefficient)
-				// System.out.println("first byte: " + String.format("0x%X",
-				// header.getData().get(0)));
-				// System.out.println("second byte: " + String.format("0x%X",
-				// header.getData().get(1)));
-				// System.exit(1);
+		for (int i = 0; i < header.getVerticalBlockCount(); i += header.getVerticalSamplingFactor()) {
+			for (int j = 0; j < header.getHorizontalBlockCount(); j += header.getHorizontalSamplingFactor()) {
+				for (int k = 1; k < header.getComponents().size(); k++) {
+					int lastDC = getLastDCs()[k - 1];
+					Component component = header.getComponents().get(k);
+					int componentID = component.getID();
+					int vMax = component.getVerticalSamplingFactor();
+					int hMax = component.getHorizontalSamplingFactor();
 
-				// System.out.println("DC table ID: " + component.getDCHuffmanTableID());
-				// System.out.println("AC table ID: " + component.getACHuffmanTableID());
-				// System.out.println("huffman coded byte: ");
-				// for (int k = 0; k < 128; k++) {
-				// if (k % 16 == 0)
-				// System.out.println();
-				// int ret =
-				// huffmanDecode(header.getACHuffmanTable().get(component.getACHuffmanTableID()),
-				// bitInputStream);
-				// System.out.print(String.format("0x%x", (int) ret) + " ");
-				// System.out.print(String.format("0x%x", (int) bitInputStream.readNBits(8)) + "
-				// ");
-				// }
-				// System.exit(1);
+					for (int v = 0; v < vMax; v++) {
+						for (int h = 0; h < hMax; h++) {
+							int verticalOffset = i + v;
+							int horizontalOffset = j + h;
+							Block block = blocks
+									.get(verticalOffset * horizontalBlockCount + horizontalOffset);
+							lastDC = getLastDCs()[k - 1];
+							int idx = 0;
 
-				// System.out.println("DC table ID: " + component.getDCHuffmanTableID());
-				// System.out.println("AC table ID: " + component.getACHuffmanTableID());
-				// System.out.println("Decoding DC value...");
-				int dcLength = huffmanDecode(header.getDCHuffmanTable().get(component.getDCHuffmanTableID()),
-						bitInputStream);
-				if (dcLength > 11) {
-					System.out.println("Error: Invalid DC coefficient");
-					System.exit(1);
-				}
-				int dcCoeff = bitInputStream.readNBits(dcLength);
-				if (dcLength > 0 && dcCoeff < (1 << (dcLength - 1))) {
-					dcCoeff = dcCoeff - (1 << dcLength) + 1;
-				}
-				int finalDCCoeff = dcCoeff + lastDC;
-				block.getComponentDataByID(componentID)[header.getIndex2ZigZagMap().get(idx)] = finalDCCoeff;
-				getLastDCs()[i - 1] = finalDCCoeff;
-				idx++;
-				// System.out.println();
-				// System.out.println("dc length: " + dcLength + ", dcCoeff: " + dcCoeff);
-				// System.out.println("DC coefficient: " + finalDCCoeff);
-				// System.out.println("Done decoding DC value...");
-				// System.out.println("dclength: " + dcLength + ", dcCoeff: " + dcCoeff);
+							// Decode DC
+							int dcLength = huffmanDecode(
+									header.getDCHuffmanTable().get(component.getDCHuffmanTableID()),
+									bitInputStream);
+							if (dcLength > 11) {
+								System.out.println("invalid DC coefficient");
+								System.exit(1);
+							}
+							int dcCoeff = bitInputStream.readNBits(dcLength);
+							if (dcLength > 0 && dcCoeff < (1 << (dcLength - 1))) {
+								dcCoeff = dcCoeff - (1 << dcLength) + 1;
+							}
+							int finalDCCoeff = dcCoeff + lastDC;
+							block.getComponentDataByID(componentID)[header.getIndex2ZigZagMap()
+									.get(idx)] = finalDCCoeff;
+							getLastDCs()[k - 1] = finalDCCoeff;
+							idx++;
 
-				// for(int k = 0; k < 57; k++){
-				// System.out.print(bitInputStream.read());
-				// }
-				// System.out.println();
-				// System.exit(1);
+							// decode AC
+							while (idx < 64) {
+								int symbol = huffmanDecode(
+										header.getACHuffmanTable().get(component.getACHuffmanTableID()),
+										bitInputStream);
+								if (symbol == -1) {
+									System.out.println("invalid AC coefficent");
+									System.exit(1);
+								}
 
-				// decode AC
-				// (preceding zero count, AC coefficient bit length)
-				// System.out.println("Decoding AC value...");
-				while (idx < 64) {
-					// System.out.println();
-					// System.out.print("bit: ");
-					int symbol = huffmanDecode(header.getACHuffmanTable().get(component.getACHuffmanTableID()),
-							bitInputStream);
-					if (symbol == -1) {
-						System.out.println("Error: invalid AC coefficent");
-						System.exit(1);
-					}
-					// System.out.println("symbol: " + String.format("0x%X", symbol));
+								if (symbol == 0x00) { // 63 AC coefficient will be zero
+									break;
+								}
 
-					if (symbol == 0x00) { // 63 AC coefficient will be zero
-						// zero is filled during initialization, so skip it
-						// for (; idx < 64; idx++) {
-						// block.getData()[index2ZigZagMap.get(idx)] = 0;
-						// }
-						// System.out.println("AC coefficient: " + 0);
+								int precedingZeroCount = symbol >> 4;
+								if (precedingZeroCount == 0xF0) { // it should be 16 zero even 0xF0 is 15
+									precedingZeroCount = 16;
+								}
 
-						break;
-					}
+								if (idx + precedingZeroCount >= 64) {
+									System.out.println("preceding zero count exceeding 8x8 block");
+									System.exit(1);
+								}
 
-					int precedingZeroCount = symbol >> 4;
-					if (precedingZeroCount == 0xF0) { // it should be 16 zero even 0xF0 is 15
-						precedingZeroCount = 16;
-					}
+								for (int w = 0; w < precedingZeroCount; w++, idx++) {
+									block.getComponentDataByID(componentID)[header.getIndex2ZigZagMap().get(idx)] = 0;
+								}
 
-					if (idx + precedingZeroCount >= 64) {
-						System.out.println(
-								"idx: " + idx + ", precedingZeroCount: " + String.format("0x%X", precedingZeroCount));
-						System.out.println("Error: preceding zero count exceeding 8x8 block");
-						System.exit(1);
-					}
-
-					for (int j = 0; j < precedingZeroCount; j++, idx++) {
-						block.getComponentDataByID(componentID)[header.getIndex2ZigZagMap().get(idx)] = 0;
-					}
-
-					int acLength = symbol & 0x0F;
-					if (acLength > 10) {
-						System.out.println("Error: invalid AC coefficient");
-						System.exit(1);
-					}
-					int acCoeff = 0;
-					if (acLength != 0) {
-						acCoeff = bitInputStream.readNBits(acLength);
-						if (acCoeff < (1 << (acLength - 1))) {
-							acCoeff = acCoeff - (1 << acLength) + 1;
+								int acLength = symbol & 0x0F;
+								if (acLength > 10) {
+									System.out.println("invalid AC coefficient");
+									System.exit(1);
+								}
+								int acCoeff = 0;
+								if (acLength != 0) {
+									acCoeff = bitInputStream.readNBits(acLength);
+									if (acCoeff < (1 << (acLength - 1))) {
+										acCoeff = acCoeff - (1 << acLength) + 1;
+									}
+								}
+								block.getComponentDataByID(componentID)[header.getIndex2ZigZagMap().get(idx)] = acCoeff;
+								idx++;
+							}
 						}
 					}
-					block.getComponentDataByID(componentID)[header.getIndex2ZigZagMap().get(idx)] = acCoeff;
-					idx++;
-					// System.out.println("AC coefficient: " + acCoeff);
 				}
-				// System.out.println("Done decoding AC value...");
-				blocks.add(block);
 			}
 		}
-		// System.out.println("blocks size:" + blocks.size());
-		// System.exit(0);
-
 		return blocks;
 	}
 
@@ -211,7 +179,6 @@ class JPEGDecoder {
 		int index = 0;
 		int symbol = huffmanTable.getSymbol(index);
 
-		// System.out.print("bit: ");
 		while (symbol == Integer.MIN_VALUE) {
 			bit = bitInputStream.read();
 			if (bit == 0) {
@@ -219,14 +186,12 @@ class JPEGDecoder {
 			} else {
 				index = (index << 1) + 2;
 			}
-			// System.out.print("" + bit);
 
 			if (index >= huffmanTable.getTree().length)
 				return -1;
 
 			symbol = huffmanTable.getSymbol(index);
 		}
-		// System.out.println();
 
 		return symbol;
 	}
@@ -236,211 +201,272 @@ class JPEGDecoder {
 	}
 
 	public void dequantize(JPEGHeader header) {
-		for (int i = 0; i < blocks.size(); i++) {
-			Block block = blocks.get(i);
+		int horizontalBlockCount = header.getHorizontalBlockCount();
 
-			for (int j = 1; j < header.getComponents().size(); j++) {
-				Component component = header.getComponents().get(j);
-				int[] componentData = block.getComponentDataByID(j);
-				QuantizationTable quantizationTable = header.getQuantizationTableByID(component.getQuantizedTableID());
-				int[] quantizationTableData = quantizationTable.getData();
+		if (header.getHorizontalSamplingFactor() == 2 && header.getWidth() % 2 != 0) {
+			horizontalBlockCount = header.getHorizontalBlockCount() + 1;
+		}
 
-				for (int k = 0; k < 64; k++) {
-					componentData[k] *= quantizationTableData[k];
+		for (int i = 0; i < header.getVerticalBlockCount(); i += header.getVerticalSamplingFactor()) {
+			for (int j = 0; j < header.getHorizontalBlockCount(); j += header.getHorizontalSamplingFactor()) {
+				for (int k = 1; k < header.getComponents().size(); k++) {
+					Component component = header.getComponents().get(k);
+					int vMax = component.getVerticalSamplingFactor();
+					int hMax = component.getHorizontalSamplingFactor();
+					int quantizationTableID = component.getQuantizedTableID();
+
+					for (int v = 0; v < vMax; v++) {
+						for (int h = 0; h < hMax; h++) {
+							int verticalOffset = i + v;
+							int horizontalOffset = j + h;
+							Block block = blocks
+									.get(verticalOffset * horizontalBlockCount + horizontalOffset);
+							int[] componentData = block.getComponentDataByID(k);
+							QuantizationTable quantizationTable = header.getQuantizationTableByID(quantizationTableID);
+							int[] quantizationTableData = quantizationTable.getData();
+
+							for (int l = 0; l < 64; l++) {
+								componentData[l] *= quantizationTableData[l];
+							}
+						}
+					}
 				}
 			}
 		}
 	}
 
-	private static final float[] IDCT_SCALING_FACTORS = {
-			(float) (2.0 * 4.0 / Math.sqrt(2.0) * 0.0625),
-			(float) (4.0 * Math.cos(Math.PI / 16.0) * 0.125),
-			(float) (4.0 * Math.cos(2.0 * Math.PI / 16.0) * 0.125),
-			(float) (4.0 * Math.cos(3.0 * Math.PI / 16.0) * 0.125),
-			(float) (4.0 * Math.cos(4.0 * Math.PI / 16.0) * 0.125),
-			(float) (4.0 * Math.cos(5.0 * Math.PI / 16.0) * 0.125),
-			(float) (4.0 * Math.cos(6.0 * Math.PI / 16.0) * 0.125),
-			(float) (4.0 * Math.cos(7.0 * Math.PI / 16.0) * 0.125), };
+	final float m0 = (float) 1.847759; // (float)(2.0 * Math.cos(1.0/16.0 * 2.0 * Math.PI));
+	final float m1 = (float) 1.4142135; // (float)(2.0 * Math.cos(2.0/16.0 * 2.0 * Math.PI));
+	final float m3 = (float) 1.4142135; // (float)(2.0 * Math.cos(2.0/16.0 * 2.0 * Math.PI));
+	final float m5 = (float) 0.76536685; // (float)(2.0 * Math.cos(3.0/16.0 * 2.0 * Math.PI));
+	final float m2 = (float) 1.0823922; // m0-m5;
+	final float m4 = (float) 2.6131258; // m0+m5;
 
-	private static final float A1 = (float) (Math.cos(2.0 * Math.PI / 8.0));
-	private static final float A2 = (float) (Math.cos(Math.PI / 8.0) - Math.cos(3.0 * Math.PI / 8.0));
-	private static final float A3 = A1;
-	private static final float A4 = (float) (Math.cos(Math.PI / 8.0) + Math.cos(3.0 * Math.PI / 8.0));
-	private static final float A5 = (float) (Math.cos(3.0 * Math.PI / 8.0));
+	final float s0 = (float) 0.35355338; // (float)(Math.cos(0.0/16.0 *Math.PI)/Math.sqrt(8));
+	final float s1 = (float) 0.49039263; // (float)(Math.cos(1.0/16.0 *Math.PI)/2.0);
+	final float s2 = (float) 0.46193975; // (float)(Math.cos(2.0/16.0 *Math.PI)/2.0);
+	final float s3 = (float) 0.4157348; // (float)(Math.cos(3.0/16.0 *Math.PI)/2.0);
+	final float s4 = (float) 0.35355338; // (float)(Math.cos(4.0/16.0 *Math.PI)/2.0);
+	final float s5 = (float) 0.27778512; // (float)(Math.cos(5.0/16.0 *Math.PI)/2.0);
+	final float s6 = (float) 0.19134171; // (float)(Math.cos(6.0/16.0 *Math.PI)/2.0);
+	final float s7 = (float) 0.09754516; // (float)(Math.cos(7.0/16.0 *Math.PI)/2.0);
 
-	private static final float C2 = (float) (2.0 * Math.cos(Math.PI / 8));
-	private static final float C4 = (float) (2.0 * Math.cos(2 * Math.PI / 8));
-	private static final float C6 = (float) (2.0 * Math.cos(3 * Math.PI / 8));
-	private static final float Q = C2 - C6;
-	private static final float R = C2 + C6;
-
+	// ref: https://codereview.stackexchange.com/questions/265527/faster-aan-algorithm-for-calculating-discrete-cosine-transform
 	public void IDCT8x8(final int[] data) {
-		float[] matrix = new float[data.length];
-		for (int i = 0; i < data.length; i++) {
-			matrix[i] = (float) data[i];
-		}
-		// System.out.println("before");
-		// for (int k = 0; k < 64; k++) {
-		// if (k % 8 == 0) {
-		// System.out.println();
-		// }
-		// System.out.print(matrix[k] + ", ");
-		// }
-		float a2, a3, a4, tmp1, tmp2, a5, a6, a7;
-		float tmp4, neg_b4, b6, b2, b5;
-		float tmp3, n0, n1, n2, n3, neg_n5;
-		float m3, m4, m5, m6, neg_m7;
 
 		for (int i = 0; i < 8; i++) {
-			a2 = matrix[8 * i + 2] - matrix[8 * i + 6];
-			a3 = matrix[8 * i + 2] + matrix[8 * i + 6];
-			a4 = matrix[8 * i + 5] - matrix[8 * i + 3];
-			tmp1 = matrix[8 * i + 1] + matrix[8 * i + 7];
-			tmp2 = matrix[8 * i + 3] + matrix[8 * i + 5];
-			a5 = tmp1 - tmp2;
-			a6 = matrix[8 * i + 1] - matrix[8 * i + 7];
-			a7 = tmp1 + tmp2;
-			tmp4 = C6 * (a4 + a6);
-			neg_b4 = Q * a4 + tmp4;
-			b6 = R * a6 - tmp4;
-			b2 = a2 * C4;
-			b5 = a5 * C4;
-			tmp3 = b6 - a7;
-			n0 = tmp3 - b5;
-			n1 = matrix[8 * i] - matrix[8 * i + 4];
-			n2 = b2 - a3;
-			n3 = matrix[8 * i] + matrix[8 * i + 4];
-			neg_n5 = neg_b4;
-			m3 = n1 + n2;
-			m4 = n3 + a3;
-			m5 = n1 - n2;
-			m6 = n3 - a3;
-			neg_m7 = neg_n5 + n0;
-			matrix[8 * i] = m4 + a7;
-			matrix[8 * i + 1] = m3 + tmp3;
-			matrix[8 * i + 2] = m5 - n0;
-			matrix[8 * i + 3] = m6 + neg_m7;
-			matrix[8 * i + 4] = m6 - neg_m7;
-			matrix[8 * i + 5] = m5 + n0;
-			matrix[8 * i + 6] = m3 - tmp3;
-			matrix[8 * i + 7] = m4 - a7;
+			final float g0 = data[0 * 8 + i] * s0;
+			final float g1 = data[4 * 8 + i] * s4;
+			final float g2 = data[2 * 8 + i] * s2;
+			final float g3 = data[6 * 8 + i] * s6;
+			final float g4 = data[5 * 8 + i] * s5;
+			final float g5 = data[1 * 8 + i] * s1;
+			final float g6 = data[7 * 8 + i] * s7;
+			final float g7 = data[3 * 8 + i] * s3;
+
+			final float f0 = g0;
+			final float f1 = g1;
+			final float f2 = g2;
+			final float f3 = g3;
+			final float f4 = g4 - g7;
+			final float f5 = g5 + g6;
+			final float f6 = g5 - g6;
+			final float f7 = g4 + g7;
+
+			final float e0 = f0;
+			final float e1 = f1;
+			final float e2 = f2 - f3;
+			final float e3 = f2 + f3;
+			final float e4 = f4;
+			final float e5 = f5 - f7;
+			final float e6 = f6;
+			final float e7 = f5 + f7;
+			final float e8 = f4 + f6;
+
+			final float d0 = e0;
+			final float d1 = e1;
+			final float d2 = e2 * m1;
+			final float d3 = e3;
+			final float d4 = e4 * m2;
+			final float d5 = e5 * m3;
+			final float d6 = e6 * m4;
+			final float d7 = e7;
+			final float d8 = e8 * m5;
+
+			final float c0 = d0 + d1;
+			final float c1 = d0 - d1;
+			final float c2 = d2 - d3;
+			final float c3 = d3;
+			final float c4 = d4 + d8;
+			final float c5 = d5 + d7;
+			final float c6 = d6 - d8;
+			final float c7 = d7;
+			final float c8 = c5 - c6;
+
+			final float b0 = c0 + c3;
+			final float b1 = c1 + c2;
+			final float b2 = c1 - c2;
+			final float b3 = c0 - c3;
+			final float b4 = c4 - c8;
+			final float b5 = c8;
+			final float b6 = c6 - c7;
+			final float b7 = c7;
+
+			data[0 * 8 + i] =(int) (b0 + b7);
+			data[1 * 8 + i] =(int) (b1 + b6);
+			data[2 * 8 + i] =(int) (b2 + b5);
+			data[3 * 8 + i] =(int) (b3 + b4);
+			data[4 * 8 + i] =(int) (b3 - b4);
+			data[5 * 8 + i] =(int) (b2 - b5);
+			data[6 * 8 + i] =(int) (b1 - b6);
+			data[7 * 8 + i] =(int) (b0 - b7);
 		}
 
 		for (int i = 0; i < 8; i++) {
-			a2 = matrix[16 + i] - matrix[48 + i];
-			a3 = matrix[16 + i] + matrix[48 + i];
-			a4 = matrix[40 + i] - matrix[24 + i];
-			tmp1 = matrix[8 + i] + matrix[56 + i];
-			tmp2 = matrix[24 + i] + matrix[40 + i];
-			a5 = tmp1 - tmp2;
-			a6 = matrix[8 + i] - matrix[56 + i];
-			a7 = tmp1 + tmp2;
-			tmp4 = C6 * (a4 + a6);
-			neg_b4 = Q * a4 + tmp4;
-			b6 = R * a6 - tmp4;
-			b2 = a2 * C4;
-			b5 = a5 * C4;
-			tmp3 = b6 - a7;
-			n0 = tmp3 - b5;
-			n1 = matrix[i] - matrix[32 + i];
-			n2 = b2 - a3;
-			n3 = matrix[i] + matrix[32 + i];
-			neg_n5 = neg_b4;
-			m3 = n1 + n2;
-			m4 = n3 + a3;
-			m5 = n1 - n2;
-			m6 = n3 - a3;
-			neg_m7 = neg_n5 + n0;
-			matrix[i] = m4 + a7;
-			matrix[8 + i] = m3 + tmp3;
-			matrix[16 + i] = m5 - n0;
-			matrix[24 + i] = m6 + neg_m7;
-			matrix[32 + i] = m6 - neg_m7;
-			matrix[40 + i] = m5 + n0;
-			matrix[48 + i] = m3 - tmp3;
-			matrix[56 + i] = m4 - a7;
-		}
+			final float g0 = data[i * 8 + 0] * s0;
+			final float g1 = data[i * 8 + 4] * s4;
+			final float g2 = data[i * 8 + 2] * s2;
+			final float g3 = data[i * 8 + 6] * s6;
+			final float g4 = data[i * 8 + 5] * s5;
+			final float g5 = data[i * 8 + 1] * s1;
+			final float g6 = data[i * 8 + 7] * s7;
+			final float g7 = data[i * 8 + 3] * s3;
 
-		// System.out.println("after");
-		// for (int k = 0; k < 64; k++) {
-		// if (k % 8 == 0) {
-		// System.out.println();
-		// }
-		// System.out.print(matrix[k] + ", ");
-		// }
-		for (int k = 0; k < 64; k++) {
-			data[k] = (int) matrix[k];
+			final float f0 = g0;
+			final float f1 = g1;
+			final float f2 = g2;
+			final float f3 = g3;
+			final float f4 = g4 - g7;
+			final float f5 = g5 + g6;
+			final float f6 = g5 - g6;
+			final float f7 = g4 + g7;
+
+			final float e0 = f0;
+			final float e1 = f1;
+			final float e2 = f2 - f3;
+			final float e3 = f2 + f3;
+			final float e4 = f4;
+			final float e5 = f5 - f7;
+			final float e6 = f6;
+			final float e7 = f5 + f7;
+			final float e8 = f4 + f6;
+
+			final float d0 = e0;
+			final float d1 = e1;
+			final float d2 = e2 * m1;
+			final float d3 = e3;
+			final float d4 = e4 * m2;
+			final float d5 = e5 * m3;
+			final float d6 = e6 * m4;
+			final float d7 = e7;
+			final float d8 = e8 * m5;
+
+			final float c0 = d0 + d1;
+			final float c1 = d0 - d1;
+			final float c2 = d2 - d3;
+			final float c3 = d3;
+			final float c4 = d4 + d8;
+			final float c5 = d5 + d7;
+			final float c6 = d6 - d8;
+			final float c7 = d7;
+			final float c8 = c5 - c6;
+
+			final float b0 = c0 + c3;
+			final float b1 = c1 + c2;
+			final float b2 = c1 - c2;
+			final float b3 = c0 - c3;
+			final float b4 = c4 - c8;
+			final float b5 = c8;
+			final float b6 = c6 - c7;
+			final float b7 = c7;
+
+			data[i * 8 + 0] = (int)(b0 + b7) + 128;
+			data[i * 8 + 1] = (int)(b1 + b6) + 128;
+			data[i * 8 + 2] = (int)(b2 + b5) + 128;
+			data[i * 8 + 3] = (int)(b3 + b4) + 128;
+			data[i * 8 + 4] = (int)(b3 - b4) + 128;
+			data[i * 8 + 5] = (int)(b2 - b5) + 128;
+			data[i * 8 + 6] = (int)(b1 - b6) + 128;
+			data[i * 8 + 7] = (int)(b0 - b7) + 128;
 		}
-		// System.exit(0);
 	}
 
 	public void IDCT(JPEGHeader header) {
-		int componentCount = header.getComponents().size() - 1;
+		int horizontalBlockCount = header.getHorizontalBlockCount();
 
-		for (int i = 0; i < blocks.size(); i++) {
-			Block block = blocks.get(i);
-			for (int j = 1; j <= componentCount; j++) {
-				int[] data = block.getComponentDataByID(j);
+		if (header.getHorizontalSamplingFactor() == 2 && header.getWidth() % 2 != 0) {
+			horizontalBlockCount = header.getHorizontalBlockCount() + 1;
+		}
 
-				// System.out.println("Before");
-				// for (int k = 0; k < 64; k++) {
-				// if (k % 8 == 0) {
-				// System.out.println();
-				// }
-				// System.out.print(data[k] + ", ");
-				// }
-				// System.out.println();
+		for (int i = 0; i < header.getVerticalBlockCount(); i += header.getVerticalSamplingFactor()) {
+			for (int j = 0; j < header.getHorizontalBlockCount(); j += header.getHorizontalSamplingFactor()) {
+				for (int k = 1; k < header.getComponents().size(); k++) {
+					Component component = header.getComponents().get(k);
+					int vMax = component.getVerticalSamplingFactor();
+					int hMax = component.getHorizontalSamplingFactor();
+					for (int v = 0; v < vMax; v++) {
+						for (int h = 0; h < hMax; h++) {
+							int verticalOffset = i + v;
+							int horizontalOffset = j + h;
+							Block block = blocks
+									.get(verticalOffset * horizontalBlockCount + horizontalOffset);
+							int[] componentData = block.getComponentDataByID(k);
 
-				IDCT8x8(data);
-
-				// System.out.println("after");
-				// for (int k = 0; k < 64; k++) {
-				// if (k % 8 == 0) {
-				// System.out.println();
-				// }
-				// System.out.print(data[k] + ", ");
-				// }
-				// System.exit(0);
+							IDCT8x8(componentData);
+						}
+					}
+				}
 			}
 		}
 	}
 
-	public void YCbCr2RGB() {
-		for (int i = 0; i < blocks.size(); i += 3) {
-			Block Y = blocks.get(i);
-			Block Cb = blocks.get(i + 1);
-			Block Cr = blocks.get(i + 2);
+	public void YCbCr2RGB(JPEGHeader header) {
+		int vMax = header.getVerticalSamplingFactor();
+		int hMax = header.getHorizontalSamplingFactor();
+		int horizontalBlockCount = header.getHorizontalBlockCount();
 
-			int[] YData = Y.getComponentDataByID(1);
-			int[] CbData = Cb.getComponentDataByID(2);
-			int[] CrData = Cr.getComponentDataByID(3);
-			int[][][] rgbData = Y.getRgb();
-			int rowIdx = 0;
-			int colIdx = 0;
+		if (header.getHorizontalSamplingFactor() == 2 && header.getWidth() % 2 != 0) {
+			horizontalBlockCount = header.getHorizontalBlockCount() + 1;
+		}
 
-			for (int j = 0; j < 64; j++) {
-				int r = (int) (YData[j] + 1.402 * (CrData[j] - 128));
-				int g = (int) (YData[j] - 0.34414 * (CbData[j] - 128) - 0.71414 * (CrData[j] - 128));
-				int b = (int) (YData[j] + 1.772 * (CbData[j] - 128));
+		for (int i = 0; i < header.getVerticalBlockCount(); i += header.getVerticalSamplingFactor()) {
+			for (int j = 0; j < header.getHorizontalBlockCount(); j += header.getHorizontalSamplingFactor()) {
+				Block chromaBlock = blocks.get(i * horizontalBlockCount + j);
+				int[] cbData = chromaBlock.getComponentDataByID(2);
+				int[] crData = chromaBlock.getComponentDataByID(3);
 
-				if (r < 0)
-					r = 0;
-				else if (r > 255)
-					r = 255;
-				if (g < 0)
-					g = 0;
-				else if (g > 255)
-					g = 255;
-				if (b < 0)
-					b = 0;
-				else if (b > 255)
-					b = 255;
+				int[][][] yDataRgb = null;
+				for (int v = 0; v < vMax; v++) {
+					for (int h = 0; h < hMax; h++) {
+						int verticalOffset = i + v;
+						int horizontalOffset = j + h;
+						Block yBlock = blocks
+								.get(verticalOffset * horizontalBlockCount + horizontalOffset);
+						int[] yData = yBlock.getComponentDataByID(1);
 
-				rowIdx = j / 8;
-				colIdx = j % 8;
-				rgbData[rowIdx][colIdx][0] = r;
-				rgbData[rowIdx][colIdx][1] = g;
-				rgbData[rowIdx][colIdx][2] = b;
+						for (int w = 0; w < 8; w++) {
+							for (int z = 0; z < 8; z++) {
+								int chromaPixelIndex = (w / vMax + 4 * v) * 8 + (z / hMax + 4 * h);
+								int yPixelIndex = w * 8 + z;
+
+								int r = (int) (yData[yPixelIndex] + 1.402 * (crData[chromaPixelIndex] - 128));
+								int g = (int) (yData[yPixelIndex] - 0.34414 * (cbData[chromaPixelIndex] - 128)
+										- 0.71414 * (crData[chromaPixelIndex] - 128));
+								int b = (int) (yData[yPixelIndex] + 1.772 * (cbData[chromaPixelIndex] - 128));
+
+								// prevent out of range [0 - 255]
+								r = Math.max(0, Math.min(255, r));
+								g = Math.max(0, Math.min(255, g));
+								b = Math.max(0, Math.min(255, b));
+
+								yDataRgb = yBlock.getRgb();
+								yDataRgb[w][yPixelIndex % 8][0] = r;
+								yDataRgb[w][yPixelIndex % 8][1] = g;
+								yDataRgb[w][yPixelIndex % 8][2] = b;
+							}
+						}
+					}
+				}
 			}
 		}
 	}
@@ -469,8 +495,6 @@ class BitInputStream {
 			bitIndex = 7;
 			byteIndex += 1;
 		}
-
-		// System.out.print(bit);
 
 		return bit;
 	}
@@ -645,6 +669,13 @@ class JPEGHeader {
 	List<Integer> data;
 	HashMap<Integer, Integer> index2ZigZagMap;
 
+	int verticalSamplingFactor = 1; // 4:4:4
+	int horizontalSamplingFactor = 1; // 4:4:4
+	int verticalBlockCount;
+	int horizontalBlockCount;
+	boolean isVerticalMultipleBlock; // true: vertical is multiple of 8x8 block
+	boolean isHorizontalMultipleBlock; // true: horizontal multiple of 8x8 block
+
 	JPEGHeader() {
 		this.sos = new byte[10];
 		this.quantizationTable = new ArrayList<QuantizationTable>();
@@ -729,6 +760,38 @@ class JPEGHeader {
 		return index2ZigZagMap;
 	}
 
+	boolean getIsVerticalMultipleBlock() {
+		return isVerticalMultipleBlock;
+	}
+
+	boolean getIsHorizontalMultipleBlock() {
+		return isHorizontalMultipleBlock;
+	}
+
+	public void setHorizontalMultipleBlock(boolean isHorizontalMultipleBlock) {
+		this.isHorizontalMultipleBlock = isHorizontalMultipleBlock;
+	}
+
+	public void setVerticalMultipleBlock(boolean isVerticalMultipleBlock) {
+		this.isVerticalMultipleBlock = isVerticalMultipleBlock;
+	}
+
+	public int getVerticalBlockCount() {
+		return verticalBlockCount;
+	}
+
+	public int getHorizontalBlockCount() {
+		return horizontalBlockCount;
+	}
+
+	public int getVerticalSamplingFactor() {
+		return verticalSamplingFactor;
+	}
+
+	public int getHorizontalSamplingFactor() {
+		return horizontalSamplingFactor;
+	}
+
 	public List<Component> getComponents() {
 		return components;
 	}
@@ -779,13 +842,42 @@ class Main {
 
 		String jpegImageFilename = args[0];
 		JPEGHeader jpegHeader = new JPEGHeader();
+		JPEGDecoder jpegDecoder = new JPEGDecoder();
 		try {
 			File jpegImage = new File(jpegImageFilename);
 			InputStream jpegByteStream = new FileInputStream(jpegImage);
 
-			int byteData, byteData1, byteData2;
-			int markerSize;
+			parseJPEGHeader(jpegByteStream, jpegHeader);
+			jpegByteStream.close();
 
+			jpegDecoder.decode(jpegHeader);
+			jpegDecoder.dequantize(jpegHeader);
+			jpegDecoder.IDCT(jpegHeader);
+			jpegDecoder.YCbCr2RGB(jpegHeader);
+			saveBMP(jpegImageFilename, jpegHeader, jpegDecoder.getBlocks());
+		} catch (Exception e) {
+			System.out.println("Some error occur");
+			e.printStackTrace();
+		}
+	}
+
+	public static boolean reachMarker(int byteData) {
+		return byteData == 0xFF;
+	}
+
+	public static int mergeTwoBytes(int byteData1, int byteData2) {
+		return (byteData1 << 8) | byteData2;
+	}
+
+	public static void usage() {
+		System.out.println("Usage: java Main jpeg_filename");
+	}
+
+	public static void parseJPEGHeader(InputStream jpegByteStream, JPEGHeader jpegHeader) {
+		int byteData, byteData1, byteData2;
+		int markerSize;
+
+		try {
 			while (jpegByteStream.available() > 0) {
 				byteData = jpegByteStream.read();
 
@@ -803,43 +895,45 @@ class Main {
 					case 0xE0:
 						byteData1 = jpegByteStream.read();
 						byteData2 = jpegByteStream.read();
-						markerSize = getMarkerSize(byteData1, byteData2) - 2;
+						markerSize = mergeTwoBytes(byteData1, byteData2) - 2;
 						jpegByteStream.readNBytes(markerSize);
 						break;
 
 					// DQT(Define Quantization Table)
 					case 0xDB:
 						// marker size
-						jpegByteStream.read();
-						jpegByteStream.read();
+						byteData1 = jpegByteStream.read();
+						byteData2 = jpegByteStream.read();
+						markerSize = mergeTwoBytes(byteData1, byteData2) - 2;
 
-						byteData = jpegByteStream.read();
-						int is16Bit = (byteData & 0xF0) >> 4;
-						int tableID = byteData & 0x0F;
-						QuantizationTable quantizationTable = new QuantizationTable(tableID);
+						while (markerSize > 0) {
+							byteData = jpegByteStream.read();
+							markerSize--;
 
-						if (is16Bit == 0x1) {
-							for (int i = 0; i < 64; i++) {
-								byteData1 = jpegByteStream.read();
-								byteData2 = jpegByteStream.read();
-								quantizationTable.getData()[jpegHeader.getIndex2ZigZagMap()
-										.get(i)] = (byteData1 << 8) | byteData2;
+							int is16Bit = (byteData & 0xF0) >> 4;
+							int tableID = byteData & 0x0F;
+							QuantizationTable quantizationTable = new QuantizationTable(tableID);
+
+							if (is16Bit == 0x1) {
+								for (int i = 0; i < 64; i++) {
+									byteData1 = jpegByteStream.read();
+									byteData2 = jpegByteStream.read();
+									markerSize -= 2;
+
+									quantizationTable.getData()[jpegHeader.getIndex2ZigZagMap()
+											.get(i)] = (byteData1 << 8) | byteData2;
+								}
+							} else { // 8 bit
+								for (int i = 0; i < 64; i++) {
+									byteData = jpegByteStream.read();
+									markerSize--;
+
+									quantizationTable.getData()[jpegHeader.getIndex2ZigZagMap()
+											.get(i)] = byteData;
+								}
 							}
-						} else { // 8 bit
-							for (int i = 0; i < 64; i++) {
-								byteData = jpegByteStream.read();
-								quantizationTable.getData()[jpegHeader.getIndex2ZigZagMap()
-										.get(i)] = byteData;
-							}
+							jpegHeader.getQuantizationTable().add(quantizationTable);
 						}
-						jpegHeader.getQuantizationTable().add(quantizationTable);
-						// for(int i = 0; i < 64; i++){
-						// 	if(i % 8 == 0){
-						// 		System.out.println();
-						// 	}
-						// 	System.out.print("" + quantizationTable.getData()[i] + '\t');
-						// }
-						// System.out.println();
 						break;
 
 					// DHT(Define Huffman Table)
@@ -847,9 +941,9 @@ class Main {
 						// marker size
 						byteData1 = jpegByteStream.read();
 						byteData2 = jpegByteStream.read();
-						markerSize = getMarkerSize(byteData1, byteData2) - 2;
+						markerSize = mergeTwoBytes(byteData1, byteData2) - 2;
 
-						while(markerSize > 0){
+						while (markerSize > 0) {
 							int tableInfo = jpegByteStream.read();
 							markerSize--;
 
@@ -862,19 +956,15 @@ class Main {
 
 							for (int i = 0; i < 16; i++) {
 								int bitLength = (int) bytes[i];
-								// System.out.print(i+1 + ": ");
-								if (bitLength == 0){
-									// System.out.println();
+								if (bitLength == 0) {
 									continue;
 								}
 
 								for (int j = 0; j < bitLength; j++) {
 									byteData = jpegByteStream.read();
-									// System.out.print("" + String.format("0x%X", byteData) + ", ");
 									bitSymbolTable.get(i + 1).add(byteData); // i + 1 simply starts from index 1
 									markerSize--;
 								}
-								// System.out.println();
 							}
 
 							// TODO: can be build when building the bitSymbolTable
@@ -886,62 +976,44 @@ class Main {
 								jpegHeader.getDCHuffmanTable().add(huffmanTable);
 							}
 						}
-
-						// int[] huffmanTree = huffmanTable.getTree();
-						// for(int i = 0; i < huffmanTree.length; i++) {
-						// 	if(huffmanTree[i] == Integer.MIN_VALUE)
-						// 		continue;
-						// 	System.out.println(" " + huffmanTree[i]);
-						// }
-						// int[] huffmanTree = huffmanTable.getTree();
-						// for (int i = 0; i < huffmanTable.getTree().length; i++) {
-						// if(huffmanTree[i] != Integer.MIN_VALUE){
-						// System.out.println("index: " + i + ", value: " + String.format("0x%X",
-						// huffmanTree[i]));
-						// }
-						// }
-						// System.exit(1);
-
-						// 0b11110000
-						// 0b10000000
-						// int bitStream = 0b10100000;
-						// int index = 0;
-						// int mask = 0b10000000;
-						// int bit;
-						// int remainingBits = 8;
-						// int symbol = huffmanTable.getSymbol(index);
-						// while(symbol == Integer.MIN_VALUE) {
-						// bit = bitStream & mask;
-						// if(bit == 0){
-						// index = (index << 1) + 1;
-						// } else {
-						// index = (index << 1) + 2;
-						// }
-						// symbol = huffmanTable.getSymbol(index);
-						// mask >>= 1;
-						// remainingBits--;
-						// }
-						// System.out.println("symbol: " + symbol + ", remainingBits: " +
-						// remainingBits);
-						// System.exit(1);
-
-						// 0x16 = 00010110
-						// (1, x), x is integer(positive or negative)
-						// 0110 is 6 so x is 6 bits long, x
-
 						break;
 
 					// SOF(Start of Frame) baseline
 					case 0xC0:
+						int height;
+						int width;
 						jpegByteStream.read();
 						jpegByteStream.read();
 						jpegByteStream.read();
 						byteData1 = jpegByteStream.read();
 						byteData2 = jpegByteStream.read();
-						jpegHeader.setHeight(getHeight(byteData1, byteData2));
+						height = mergeTwoBytes(byteData1, byteData2);
 						byteData1 = jpegByteStream.read();
 						byteData2 = jpegByteStream.read();
-						jpegHeader.setWidth(getWidth(byteData1, byteData2));
+						width = mergeTwoBytes(byteData1, byteData2);
+
+						jpegHeader.setHeight(height);
+						jpegHeader.setWidth(width);
+
+						int modRes = width % 8;
+						int divRes = width / 8;
+						if (modRes != 0) {
+							jpegHeader.horizontalBlockCount = divRes + 1;
+							jpegHeader.setHorizontalMultipleBlock(false);
+						} else {
+							jpegHeader.horizontalBlockCount = divRes;
+							jpegHeader.setHorizontalMultipleBlock(true);
+						}
+
+						modRes = height % 8;
+						divRes = height / 8;
+						if (modRes != 0) {
+							jpegHeader.verticalBlockCount = divRes + 1;
+							jpegHeader.setVerticalMultipleBlock(false);
+						} else {
+							jpegHeader.verticalBlockCount = divRes;
+							jpegHeader.setVerticalMultipleBlock(true);
+						}
 
 						int componentCount = jpegByteStream.read();
 						for (int i = 0; i < componentCount; i++) {
@@ -957,18 +1029,20 @@ class Main {
 							component.setVerticalSamplingFactor(verticalSamplingFactor);
 							component.setQuantizedTableID(quantizeID);
 
-							// System.out.println("horizontal sampling factor: " + horizontalSamplingFactor
-							// + ", vertical sampling factor: " + verticalSamplingFactor);
+							if (componentID == 1) {
+								// the largest sampling factors since Luminance component cannot be subsamspling
+								jpegHeader.horizontalSamplingFactor = horizontalSamplingFactor;
+								jpegHeader.verticalSamplingFactor = verticalSamplingFactor;
+							}
 
 							jpegHeader.getComponents().add(component);
 						}
-						// System.exit(1);
 						break;
 					// SOS(Start of Scan)
 					case 0xDA:
 						byteData1 = jpegByteStream.read();
 						byteData2 = jpegByteStream.read();
-						markerSize = getMarkerSize(byteData1, byteData2) - 2;
+						markerSize = mergeTwoBytes(byteData1, byteData2) - 2;
 
 						componentCount = jpegByteStream.read();
 						for (int i = 0; i < componentCount; i++) {
@@ -990,10 +1064,6 @@ class Main {
 							if (reachMarker(byteData2)) {
 								// EOI(End of Image)
 								if (byteData1 == 0xD9) {
-									// System.out.println("End of image and size: " + jpegHeader.getData().size());
-									// System.out.println(
-									// "width: " + jpegHeader.getWidth() + ", height: " + jpegHeader.getHeight());
-									// System.out.println("sos size: " + jpegHeader.sos.length);
 									break;
 								} else if (byteData1 == 0xFF) { // skip multiple consecutive 0xFF
 									continue;
@@ -1001,7 +1071,7 @@ class Main {
 									jpegHeader.pushData(byteData2);
 									byteData1 = jpegByteStream.read();
 								} else {
-									System.out.println("Error: invalid marker");
+									System.out.println("SOS: invalid marker");
 								}
 							} else {
 								jpegHeader.pushData(byteData2);
@@ -1013,249 +1083,62 @@ class Main {
 						break;
 				}
 			}
-			jpegByteStream.close();
-
-			// int[][] chrominance = jpegHeader.getChrominanceQuantizedTable();
-			// int[][] luminance = jpegHeader.getLuminanceQuantizedTable();
-			// // loop through luminance table
-			// for (int i = 0; i < 8; i++) {
-			// for (int j = 0; j < 8; j++) {
-			// System.out.print(String.format("0x%X", luminance[i][j]) + " ");
-			// }
-			// System.out.println();
-			// }
-			// System.out.println("-----------------");
-			// // loop through chrominance table
-			// for (int i = 0; i < 8; i++) {
-			// for (int j = 0; j < 8; j++) {
-			// System.out.print(String.format("0x%X", chrominance[i][j]) + " ");
-			// }
-			// System.out.println();
-			// }
-
-			// loop through ACHuffmanTable
-			List<HuffmanTable> ACHuffmanTable = jpegHeader.getACHuffmanTable();
-			List<HuffmanTable> DCHuffmanTable = jpegHeader.getDCHuffmanTable();
-			HashMap<Integer, List<Integer>> bitSymbolTable;
-
-			// System.out.println(" AC --------------------------------");
-			// for (int i = 0; i < ACHuffmanTable.size(); i++) {
-			// bitSymbolTable = ACHuffmanTable.get(i).getBitSymbolTable();
-			// for (int j = 0; j < 16; j++) {
-			// System.out.print(j + 1 + ": ");
-			// for (int k = 0; k < bitSymbolTable.get(j + 1).size(); k++) {
-			// System.out.print(String.format("0x%X", bitSymbolTable.get(j + 1).get(k)) + "
-			// ");
-			// }
-			// System.out.println();
-			// }
-			// }
-			// System.out.println(" DC --------------------------------");
-			// for (int i = 0; i < DCHuffmanTable.size(); i++) {
-			// bitSymbolTable = DCHuffmanTable.get(i).getBitSymbolTable();
-			// for (int j = 0; j < 16; j++) {
-			// System.out.print(j + 1 + ": ");
-			// for (int k = 0; k < bitSymbolTable.get(j + 1).size(); k++) {
-			// System.out.print(String.format("0x%X", bitSymbolTable.get(j + 1).get(k)) + "
-			// ");
-			// }
-			// System.out.println();
-			// }
-			// }
-
-			// loop through components
-			// List<Component> components = jpegHeader.getComponents();
-			// for(int i = 1; i < components.size(); i++) {
-			// Component component = components.get(i);
-			// System.out.println("componentID: " + component.getID());
-			// System.out.println("Huffman AC ID: " + component.getACHuffmanTableID());
-			// System.out.println("Huffman DC ID : " + component.getDCHuffmanTableID());
-			// System.out.println("hori sampling: " +
-			// component.getHorizontalSamplingFactor());
-			// System.out.println("ver sampling: " + component.getVerticalSamplingFactor());
-			// System.out.println("quantized ID: " + component.getQuantizedTableID());
-			// System.out.println("------------------------");
-			// }
 		} catch (Exception e) {
-			System.out.println("Cannot read jpeg image");
+			System.out.println("Some error occur");
 			e.printStackTrace();
 		}
-
-		JPEGDecoder jpegDecoder = new JPEGDecoder();
-		jpegDecoder.decode(jpegHeader);
-		jpegDecoder.dequantize(jpegHeader);
-		jpegDecoder.IDCT(jpegHeader);
-		jpegDecoder.YCbCr2RGB();
-		saveBMP(jpegImageFilename, jpegHeader.getWidth(), jpegHeader.getHeight(), jpegDecoder.getBlocks());
-
-		// System.out.println("block count: " + jpegDecoder.getBlocks().size());
-
-		// List<QuantizationTable> quantizationTableList =
-		// jpegHeader.getQuantizationTable();
-		// for(int i = 0; i < quantizationTableList.size(); i++) {
-		// QuantizationTable quantizationTable = quantizationTableList.get(i);
-		// for(int j = 0; j < 64; j++) {
-		// if(j % 8 == 0){
-		// System.out.println();
-		// }
-
-		// System.out.print(quantizationTable.getData()[j] + " ");
-		// }
-		// }
 	}
 
-	public static boolean reachMarker(int byteData) {
-		return byteData == 0xFF;
-	}
-
-	public static int getMarkerSize(int byteData1, int byteData2) {
-		return (byteData1 << 8) | byteData2;
-	}
-
-	public static int getWidth(int byteData1, int byteData2) {
-		return (byteData1 << 8) | byteData2;
-	}
-
-	public static int getHeight(int byteData1, int byteData2) {
-		return (byteData1 << 8) | byteData2;
-	}
-
-	public static void usage() {
-		System.out.println("Usage: java Main jpeg_filename");
-	}
-
-	public static void saveBMP(String filename, int width, int height, List<Block> blocks) {
-		File file;
-		BufferedImage image = null;
-		try {
-			file = new File(filename);
-			image = ImageIO.read(file);
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-
-		int[][][] rgbArray = new int[height][width][3];
-		for (int y = 0; y < height; y++) {
-			for (int x = 0; x < width; x++) {
-				int rgb = image.getRGB(x, y);
-
-				// Extract RGB components
-				int red = (rgb >> 16) & 0xFF;
-				int green = (rgb >> 8) & 0xFF;
-				int blue = rgb & 0xFF;
-
-				// Store RGB components in the array
-				rgbArray[y][x][0] = red;    // Red
-				rgbArray[y][x][1] = green;  // Green
-				rgbArray[y][x][2] = blue;   // Blue
-			}
-		}
-
-		// Get image dimensions
-		int w = image.getWidth();
-		int h = image.getHeight();
-		System.out.println("image width: " + w + ", image height: " + h);
-
-		// Create a 3D array to store RGB data
-		BufferedImage bufferedImage2 = new BufferedImage(width, height,
-				BufferedImage.TYPE_3BYTE_BGR);
-		byte[] bufferedImageBytes2 = ((DataBufferByte) bufferedImage2.getRaster().getDataBuffer()).getData();
-
-		int maxBlocksCol2 = width / 8;
-		int maxBlocksRow2 = height / 8;
+	public static void saveBMP(String filename, JPEGHeader header, List<Block> blocks) {
 		int blockIndex = 0;
 		int prevBlockIndex = 0;
-		int idx = 0;
-
-		// System.out.println("maxBlockRow2: " + maxBlocksRow2);
-		for(int i = 0; i < maxBlocksRow2; i++){
-			for(int k = 0; k < 8; k++){ // row
-				blockIndex = prevBlockIndex;
-				// System.out.println("startBlockIndex: " + blockIndex);
-				for(int j = 0; j < maxBlocksCol2; j++){
-					Block block = blocks.get(blockIndex);
-					int rgb_[][][] = block.getRgb();
-					for(int l = 0; l < 8; l++){ // col
-						for(int o = 2; o >= 0; o--){ // channel
-							bufferedImageBytes2[idx++] = (byte) rgb_[k][l][o];
-							// System.out.print(rgb_[k][l][o] + " ");
-						}
-					}
-					// if((blockIndex + 3) < blocks.size())
-					blockIndex += 3;
-					// System.out.println("j: " + j);
-				}
-				// System.out.println("idx: " + idx);
-				// System.out.println("reset blockIndex");
-				// System.out.println();
-			}
-			// System.out.println("idx: " + idx + ", i: " + i + ", finishBlockIndex: " + blockIndex);
-			prevBlockIndex = blockIndex;
-		}
-		// System.out.println("idx: " + idx);
-
-		{
-			try {
-				int dotIndex = filename.lastIndexOf('.');
-				String basename = (dotIndex == -1) ? filename
-						: filename.substring(0,
-								dotIndex);
-				File outputBMP = new File(basename + ".bmp");
-				ImageIO.write(bufferedImage2, "bmp", outputBMP);
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
-		}
-		System.exit(0);
-
-		BufferedImage bufferedImage = new BufferedImage(width, height, BufferedImage.TYPE_3BYTE_BGR);
+		int bufIdx = 0;
+		BufferedImage bufferedImage = new BufferedImage(header.getWidth(), header.getHeight(),
+				BufferedImage.TYPE_3BYTE_BGR);
 		byte[] bufferedImageBytes = ((DataBufferByte) bufferedImage.getRaster().getDataBuffer()).getData();
 
-		// // FIXME
-		int maxBlocksCol = width / 8;
-		int maxBlocksRow = height / 8;
-		// int prevBlockindex = 0;
-		// int blockIndex = 0;
+		int verticalBlockCountReal = header.getHeight() / 8;
+		int horizontalBlockCountReal = header.getWidth() / 8;
+		int horizontalPixelPadding = 0;
 
-		// List<Byte> rgbData = new ArrayList<>();
-		// int idx = 0;
+		if (!header.getIsHorizontalMultipleBlock()) {
+			horizontalPixelPadding = header.getWidth() % 8;
+		}
 
-		// for (int i = 0; i < maxBlocksCol; i++) {
-		// 	// eight line of rgb
-		// 	for (int o = 0; o < 8; o++) {
-		// 		// line of rgb of maxBlocksRow
-		// 		for (int j = 0; j < maxBlocksRow; j++) {
-		// 			Block block = blocks.get(blockIndex);
-		// 			int r[] = block.getComponentDataByID(4);
-		// 			int g[] = block.getComponentDataByID(5);
-		// 			int b[] = block.getComponentDataByID(6);
+		for (int i = 0; i < verticalBlockCountReal; i++) {
+			for (int k = 0; k < 8; k++) { // row
+				blockIndex = prevBlockIndex;
+				for (int j = 0; j < horizontalBlockCountReal; j++) {
+					Block block = blocks.get(blockIndex);
+					int rgb_[][][] = block.getRgb();
+					for (int l = 0; l < 8; l++) { // col
+						for (int o = 2; o >= 0; o--) { // channel
+							bufferedImageBytes[bufIdx++] = (byte) rgb_[k][l][o];
+						}
+					}
+					blockIndex++;
+				}
 
-		// 			// 0 - 7 , 8 - 15, ..., 56 - 63
-		// 			for (int k = 0; k < 8; k++) {
-		// 				int pixelIndex = (o * 8) + k;
-		// 				rgbData.add((byte) r[pixelIndex]);
-		// 				rgbData.add((byte) g[pixelIndex]);
-		// 				rgbData.add((byte) b[pixelIndex]);
-		// 				bufferedImageBytes[idx++] = (byte) b[pixelIndex]; // blue
-		// 				bufferedImageBytes[idx++] = (byte) g[pixelIndex]; // green
-		// 				bufferedImageBytes[idx++] = (byte) r[pixelIndex]; // red
-		// 				// System.out.println("b: " + b[pixelIndex] + ", g: " + g[pixelIndex] + ", r: "
-		// 				// + r[pixelIndex]);
-		// 			}
+				// horizontal padding on each row
+				if (horizontalPixelPadding != 0) {
+					Block block = blocks.get(blockIndex);
+					int rgb_[][][] = block.getRgb();
+					for (int l = 0; l < horizontalPixelPadding; l++) { // col
+						for (int o = 2; o >= 0; o--) { // channel
+							bufferedImageBytes[bufIdx++] = (byte) rgb_[k][l][o];
+						}
+					}
+					blockIndex++;
+				}
+			}
+			prevBlockIndex = blockIndex;
+		}
 
-		// 			if ((blockIndex + 3) < blocks.size())
-		// 				blockIndex += 3;
-		// 		}
-
-		// 		if ((o + 1) != 8) {
-		// 			blockIndex = prevBlockindex;
-		// 		} else {
-		// 			prevBlockindex = blockIndex;
-		// 		}
-		// 	}
-		// }
-		// System.out.println("size: " + rgbData.size());
-		// System.exit(0);
+		// vertical padding
+		int remainingPixelBytes = (header.getWidth() * header.getHeight() * 3) - bufIdx;
+		for (int i = 0; i < remainingPixelBytes; i++) {
+			bufferedImageBytes[bufIdx++] = (byte) 0x00;
+		}
 
 		try {
 			int dotIndex = filename.lastIndexOf('.');
@@ -1263,6 +1146,7 @@ class Main {
 			File outputBMP = new File(basename + ".bmp");
 			ImageIO.write(bufferedImage, "bmp", outputBMP);
 		} catch (Exception e) {
+			System.out.println("Some error occur");
 			e.printStackTrace();
 		}
 	}
