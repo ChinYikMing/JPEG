@@ -940,9 +940,9 @@ class Main {
 			int succApprox = jpegByteStream.read();
 			jpegHeader.setSuccApprox(succApprox);
 
-			System.out.println("startOfSpectralSelection: " + startOfSpectralSelection);
-			System.out.println("endOfSpectralSelection: " + endOfSpectralSelection);
-			System.out.println("succApprox: " + succApprox);
+			// System.out.println("startOfSpectralSelection: " + startOfSpectralSelection);
+			// System.out.println("endOfSpectralSelection: " + endOfSpectralSelection);
+			// System.out.println("succApprox: " + succApprox);
 
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -1249,6 +1249,7 @@ class Main {
 			String basename = (dotIndex == -1) ? filename : filename.substring(0, dotIndex);
 			File outputBMP = new File(basename + ".bmp");
 			ImageIO.write(bufferedImage, "bmp", outputBMP);
+			System.out.println("save to " + basename + ".bmp");
 		} catch (Exception e) {
 			System.out.println("Some error occur");
 			e.printStackTrace();
