@@ -17,7 +17,8 @@
 - monalisa.jpg: 0.14s
 - gig-sn01.jpg: 0.31s
 - gig-sn08.jpg: 0.35s
-Note: the decoding time is averaged over 10 runs respectively
+
+Note: `time` CLI command is used for statistics and the decoding time is averaged over 10 runs respectively
 
 # Some improvement
 - IDCT can be speed up in certain ways because I precalculate the coefficients that are used (see lines 238–252).
